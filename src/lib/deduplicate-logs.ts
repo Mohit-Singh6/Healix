@@ -1,7 +1,7 @@
 import { createErrorLogWithVector, findSimilarRecentErrors } from "./error-repo";
 import { generateErrorEmbedding } from "./embedding";
 import { prisma } from "./prisma";
-import type { IncidentStatus, IncidentSeverity } from "@prisma/client";
+import type { IncidentSeverity } from "@prisma/client";
 
 export interface ErrorLogInput {
     projectId: string;
