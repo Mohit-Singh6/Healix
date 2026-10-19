@@ -23,7 +23,7 @@ export interface ErrorLogInput {
 export async function generateErrorEmbedding(error: ErrorLogInput): Promise<number[]> {
   const sanitizedMessage = cleanErrorContext(error.message);
   const sanitizedTrace = cleanErrorContext(
-    error.stackTrace.split("\n").slice(0, 5).join("\n")
+    error.stackTrace.split("\n").slice(0, 5).join("\n") // Limit to first 5 lines of stack trace for embedding
   );
 
   const fingerprint = `Service: ${error.serviceName}\nError: ${sanitizedMessage}\nTrace:\n${sanitizedTrace}`;

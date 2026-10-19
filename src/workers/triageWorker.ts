@@ -26,7 +26,11 @@ export const triageWorker = new Worker<AlertJobData, DeduplicationResult>(
 
     if (result.isNewIncident) {
       console.log(`[Job ${job.id}] Novel failure detected! Created Incident: ${result.incidentId}`);
+      
       // In Phase 3: Trigger LangGraph AI triage investigation agent here
+
+
+
     } else {
       console.log(`[Job ${job.id}] Semantically clustered into active Incident: ${result.incidentId}`);
     }

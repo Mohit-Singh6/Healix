@@ -73,7 +73,7 @@ export async function findSimilarRecentErrors(
   // Cosine similarity = 1 - distance
   // Therefore: distance < (1 - similarityThreshold)
   const maxDistance = 1 - similarityThreshold;
-  const timeCutoff = new Date(Date.now() - lookbackMinutes * 60 * 1000);
+  const timeCutoff = new Date(Date.now() - lookbackMinutes * 60 * 1000); // 15 minutes ago
 
   const matches = await prisma.$queryRaw<
     Array<{
