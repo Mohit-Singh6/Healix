@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({
@@ -28,7 +29,7 @@ export async function generateErrorEmbedding(error: ErrorLogInput): Promise<numb
   const fingerprint = `Service: ${error.serviceName}\nError: ${sanitizedMessage}\nTrace:\n${sanitizedTrace}`;
 
   const response = await ai.models.embedContent({
-    model: "text-embedding-004",
+    model: "gemini-embedding-2",
     contents: fingerprint,
     config: {
       outputDimensionality: 768,
