@@ -4,17 +4,32 @@ import { redisConnection } from "../lib/redis";
 import { INCIDENT_TRIAGE_QUEUE, AlertJobData } from "../lib/queue";
 import { deduplicateErrorLog, DeduplicationResult } from "../lib/deduplicate-logs";
 import { prisma } from "../lib/prisma";
+import http from "node:http";
 
 console.log("Initializing Incident Triage Worker...");
 
-// 1. Worker Definition
+// Minimal HTTP server for Koyeb health checks
+const PORT = process.env.PORT || 8080;
+const server = http.createServer((req, res) => {
+  if (req.url === "/health" || req.url === "/") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "healthy", queue: "incident-triage-queue" }));
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`Worker health check running on port ${PORT}`);
+});
+
 export const triageWorker = new Worker<AlertJobData, DeduplicationResult>(
   INCIDENT_TRIAGE_QUEUE,
   async (job: Job<AlertJobData>) => {
     console.log(`\n[Job ${job.id}] Processing incoming alert for project: ${job.data.projectId}`);
     console.log(`[Job ${job.id}] Service: ${job.data.serviceName} | Message: ${job.data.message}`);
 
-    // Call Phase 1 Deduplication & Clustering Engine
     const result = await deduplicateErrorLog({
       projectId: job.data.projectId,
       serviceName: job.data.serviceName,
@@ -57,10 +72,11 @@ triageWorker.on("error", (err: Error) => {
   console.error("Critical worker connection error:", err);
 });
 
-// 3. Graceful Shutdown Handlers (Drain running jobs cleanly on SIGINT / SIGTERM)
+// Graceful Shutdown Handlers (Drain running jobs cleanly on SIGINT / SIGTERM)
 async function shutdown(signal: string) {
   console.log(`\nReceived ${signal}. Shutting down worker gracefully...`);
   try {
+    server.close();
     await triageWorker.close();
     await redisConnection.quit();
     await prisma.$disconnect();
