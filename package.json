@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "worker:dev": "tsx watch src/workers/triageWorker.ts",
-    "worker:start": "tsx src/workers/triageWorker.ts"
+    "worker:start": "tsx src/workers/triageWorker.ts",
+    "checkpointer:setup": "tsx src/scripts/setup-checkpointer.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

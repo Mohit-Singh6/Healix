@@ -16,6 +16,7 @@ export type CandidateCommit = z.infer<typeof CandidateCommitSchema>;
 export const ProposedActionSchema = z.enum([
   "REVERT_PR",
   "APPLY_CONFIG_PATCH",
+  "MANUAL_INTERVENTION",
   "NO_ACTION",
 ]);
 export type ProposedAction = z.infer<typeof ProposedActionSchema>;
