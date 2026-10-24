@@ -16,18 +16,22 @@ async function runBurstTest() {
   console.log(`Testing against project "${project.name}" (Key: ${project.apiKey})`);
 
   const payload = {
-    serviceName: "payment-gateway",
-    message: "Stripe connection timeout during checkout",
-    stackTrace: "TimeoutError: Request to api.stripe.com timed out after 5000ms\n at StripeClient.request (/node_modules/stripe/lib/client.js:120:11)",
-    statusCode: 504,
-    endpoint: "/api/checkout/pay",
+    serviceName: "auth-service",
+    message: `JsonWebTokenError: invalid signature on token verification - test #${Date.now()}`,
+    stackTrace: `JsonWebTokenError: invalid signature
+    at Object.module.exports [as verify] (/app/node_modules/jsonwebtoken/verify.js:133:19)
+    at verifyAuthToken (/app/src/middlewares/auth.ts:42:21)
+    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/app/node_modules/express/lib/router/route.js:144:13)`,
+    statusCode: 401,
+    endpoint: "/api/v1/auth/session",
   };
 
   // 2. Fire 5 rapid requests in parallel to test deduplication and non-blocking 202 responses
   console.log("Firing 5 concurrent alert payloads to POST /api/webhooks/alerts...");
 
   const requests = Array.from({ length: 5 }).map(async (_, idx) => {
-    const res = await fetch("http://localhost:3000/api/webhooks/alerts", {
+    const res = await fetch("https://healix.mohits.site/api/webhooks/alerts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

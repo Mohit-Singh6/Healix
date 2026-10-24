@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
       jobId,
     });
 
+    console.log(`Alert job queued with ID: ${jobId} for project ${project.id}`);
+
     // 6. Fast response (HTTP 202 Accepted)
     return NextResponse.json(
       {
