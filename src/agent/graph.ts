@@ -1,15 +1,23 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
 import { IncidentState } from "./state";
 import { getCheckpointer } from "./checkpointer";
+import { correlateLogsNode } from "./nodes/correlateLogs";
+import { inspectCodebaseNode } from "./nodes/inspectCodebase";
+import { diagnoseRootCauseNode } from "./nodes/diagnoseRootCause";
 
-// Initialize graph using the Zod-backed IncidentState schema
+// Build the state machine
 const workflow = new StateGraph(IncidentState)
-  // Nodes will be attached here (Part 3)
-  // .addNode("correlate_logs", nodeA)
-  // ...
-  .addEdge(START, END);
+  .addNode("correlate_logs", correlateLogsNode)
+  .addNode("inspect_codebase", inspectCodebaseNode)
+  .addNode("diagnose_root_cause", diagnoseRootCauseNode)
 
-// Compile the graph passing the Neon checkpointer
+  // Define linear edges: START -> A -> B -> C -> END
+  .addEdge(START, "correlate_logs")
+  .addEdge("correlate_logs", "inspect_codebase")
+  .addEdge("inspect_codebase", "diagnose_root_cause")
+  .addEdge("diagnose_root_cause", END);
+
+// Compile with persistence
 export const triageGraph = workflow.compile({
   checkpointer: getCheckpointer(),
 });
