@@ -4,18 +4,21 @@ import { getCheckpointer } from "./checkpointer";
 import { correlateLogsNode } from "./nodes/correlateLogs";
 import { inspectCodebaseNode } from "./nodes/inspectCodebase";
 import { diagnoseRootCauseNode } from "./nodes/diagnoseRootCause";
+import { humanApprovalGate } from "./nodes/humanApprovalGate";
 
 // Build the state machine
 const workflow = new StateGraph(IncidentState)
   .addNode("correlate_logs", correlateLogsNode)
   .addNode("inspect_codebase", inspectCodebaseNode)
   .addNode("diagnose_root_cause", diagnoseRootCauseNode)
+  .addNode("human_approval_gate", humanApprovalGate)
 
   // Define linear edges: START -> A -> B -> C -> END
   .addEdge(START, "correlate_logs")
   .addEdge("correlate_logs", "inspect_codebase")
   .addEdge("inspect_codebase", "diagnose_root_cause")
-  .addEdge("diagnose_root_cause", END);
+  .addEdge("diagnose_root_cause", "human_approval_gate")
+  .addEdge("human_approval_gate", END);
 
 // Compile with persistence
 export const triageGraph = workflow.compile({
