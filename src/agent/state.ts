@@ -80,6 +80,7 @@ export const IncidentState = new StateSchema({
   // --- Node E: Execution Output & Post-Mortem ---
   remediationResult: z.record(z.string(), z.unknown()).nullable().default(null),
   postMortemMarkdown: z.string().default(""),
+  revertPrUrl: z.string().nullable().default(null),
 });
 
 // 3. Extracted Types for Nodes and Graphs
