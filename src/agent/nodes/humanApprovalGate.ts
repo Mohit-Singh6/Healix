@@ -1,5 +1,4 @@
 import type { IncidentAgentState, IncidentAgentUpdate } from "../state";
-import type { HumanDecisionPayload } from "../state";
 import { interrupt } from "@langchain/langgraph";
 import { prisma } from "../../lib/prisma";
 
@@ -53,6 +52,10 @@ export async function humanApprovalGate(
     where: { id: state.incidentId },
     data: {
       status: decision.status === "APPROVED" ? "MITIGATING" : "DISMISSED",
+      targetCommitSha:
+      typeof state.actionPayload?.targetCommitSha === "string"
+        ? state.actionPayload.targetCommitSha
+        : undefined,
     },
   });
 
