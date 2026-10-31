@@ -13,42 +13,30 @@ import {
   X,
 } from "lucide-react";
 import StatusBadge from "@/src/components/ui/StatusBadge";
+import {
+  createProject,
+  getProjectWebhookUrl,
+} from "@/src/app/dashboard/actions";
+import type { DashboardProject } from "@/src/app/dashboard/actions";
 
-const projects = [
-  {
-    name: "Payment Gateway",
-    repo: "healix-labs/payment-gateway",
-    branch: "main",
-    health: "Degraded",
-    tone: "high" as const,
-    webhook: "payment-gateway",
-    incidents: 2,
-    latency: "842 ms",
-    uptime: "98.7% uptime",
-  },
-  {
-    name: "Auth Microservice",
-    repo: "healix-labs/auth-service",
-    branch: "main",
-    health: "Healthy",
-    tone: "healthy" as const,
-    webhook: "auth-microservice",
+type ProjectRow = DashboardProject & {
+  health: string;
+  tone: "healthy" | "muted";
+  incidents: number;
+  latency: string;
+  uptime: string;
+};
+
+function toProjectRow(project: DashboardProject): ProjectRow {
+  return {
+    ...project,
+    health: "Awaiting telemetry",
+    tone: "muted",
     incidents: 0,
-    latency: "96 ms",
-    uptime: "99.99% uptime",
-  },
-  {
-    name: "Orders API",
-    repo: "healix-labs/orders-api",
-    branch: "production",
-    health: "Healthy",
-    tone: "healthy" as const,
-    webhook: "orders-api",
-    incidents: 1,
-    latency: "128 ms",
-    uptime: "99.95% uptime",
-  },
-];
+    latency: "—",
+    uptime: "—",
+  };
+}
 
 const incidents = [
   {
@@ -101,23 +89,58 @@ function MetricCell({ label, value, detail, highlight = false }: {
   );
 }
 
-async function copyWebhookUrl(project: (typeof projects)[number]) {
-    const url = `${window.location.origin}/api/webhooks/alerts?service=${encodeURIComponent(project.webhook)}`;
-    if (!navigator.clipboard) {
-      throw new Error("Clipboard access is unavailable in this browser.");
-    }
-
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch (error) {
-      console.error("Unable to copy the ingestion webhook URL.", error);
-      throw error;
-    }
+async function copyText(value: string) {
+  if (!navigator.clipboard) throw new Error("Clipboard access is unavailable in this browser.");
+  await navigator.clipboard.writeText(value);
 }
 
-export default function DashboardView() {
+type DeploymentProvider = "NONE" | "VERCEL" | "RENDER" | "CUSTOM";
+
+const fieldClassName =
+  "w-full rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B]";
+
+function FormField({
+  label,
+  name,
+  placeholder,
+  type = "text",
+  required = false,
+  defaultValue,
+  helper,
+}: {
+  label: string;
+  name: string;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+  defaultValue?: string;
+  helper?: string;
+}) {
+  return (
+    <label className="flex flex-col gap-1.5 text-sm text-[#D4D4CE]">
+      {label}
+      <input
+        className={fieldClassName}
+        name={name}
+        type={type}
+        placeholder={placeholder}
+        required={required}
+        defaultValue={defaultValue}
+        autoComplete={type === "password" ? "new-password" : undefined}
+      />
+      {helper && <span className="text-xs leading-relaxed text-[#8E8E86]">{helper}</span>}
+    </label>
+  );
+}
+
+export default function DashboardView({ initialProjects }: { initialProjects: DashboardProject[] }) {
+  const [projects, setProjects] = useState(initialProjects.map(toProjectRow));
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [deploymentProvider, setDeploymentProvider] = useState<DeploymentProvider>("NONE");
+  const [createdProject, setCreatedProject] = useState<{ name: string; webhookUrl: string } | null>(null);
 
   useEffect(() => {
     if (!isAddProjectOpen) return;
@@ -129,17 +152,47 @@ export default function DashboardView() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [isAddProjectOpen]);
 
-  function submitProject(event: FormEvent<HTMLFormElement>) {
+  async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setFormError("");
+    setIsSubmitting(true);
+
+    try {
+      const result = await createProject(new FormData(event.currentTarget));
+      if (!result.success) {
+        setFormError(result.error);
+        return;
+      }
+
+      setProjects((current) => [toProjectRow(result.project), ...current]);
+      setCreatedProject({
+        name: result.project.name,
+        webhookUrl: new URL(result.webhookUrl, window.location.origin).toString(),
+      });
+    } catch (error) {
+      console.error("Project registration request failed.", error);
+      setFormError("Project registration failed unexpectedly. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  async function handleCopyWebhook(project: (typeof projects)[number]) {
+  async function handleCopyWebhook(project: ProjectRow) {
     try {
-      await copyWebhookUrl(project);
+      const webhookUrl = await getProjectWebhookUrl(project.id);
+      await copyText(new URL(webhookUrl, window.location.origin).toString());
       setCopyMessage(`${project.name} webhook URL copied.`);
     } catch (error) {
+      console.error("Unable to copy the ingestion webhook URL.", error);
       setCopyMessage(error instanceof Error ? error.message : "Could not copy webhook URL.");
     }
+  }
+
+  function closeProjectDialog() {
+    setIsAddProjectOpen(false);
+    setFormError("");
+    setCreatedProject(null);
+    setDeploymentProvider("NONE");
   }
 
   return (
@@ -157,20 +210,9 @@ export default function DashboardView() {
         className="mt-8 grid grid-cols-1 divide-y divide-[#2B2A24] rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-4 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
       >
         <MetricCell
-          label="Active Services"
-          value="12"
-          detail={
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs">
-              <span className="inline-flex items-center gap-1.5 text-emerald-400">
-                <span className="size-2 rounded-full bg-emerald-500" />
-                11 healthy
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-amber-400">
-                <span className="size-2 animate-pulse rounded-full bg-amber-500" />
-                1 degraded
-              </span>
-            </div>
-          }
+          label="Registered Services"
+          value={String(projects.length)}
+          detail={`${projects.length} connected to this workspace`}
         />
         <MetricCell label="Incidents Resolved" value="1,482" detail="94% resolved autonomously via API" />
         <MetricCell
@@ -204,9 +246,15 @@ export default function DashboardView() {
             <span>Service / Uptime</span><span>Health</span><span>Branch</span><span>P95 Latency</span><span>Open Incidents</span><span>Actions</span>
           </div>
           <div className="divide-y divide-[#262520]">
+            {projects.length === 0 && (
+              <div className="px-5 py-10 text-center">
+                <p className="text-sm text-[#D4D4CE]">No services registered yet.</p>
+                <p className="mt-1 text-sm leading-relaxed text-[#8E8E86]">Connect a GitHub repository to generate its incident-ingestion webhook.</p>
+              </div>
+            )}
             {projects.map((project) => (
               <article
-                key={project.name}
+                key={project.id}
                 className="grid gap-4 px-4 py-4 transition-colors hover:bg-[#1D1D19] sm:px-5 xl:grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_repeat(3,minmax(100px,.65fr))_minmax(190px,1fr)] xl:items-center"
               >
                 <div className="min-w-0">
@@ -216,18 +264,28 @@ export default function DashboardView() {
                       {project.uptime}
                     </span>
                   </div>
-                  <p className="mt-1 truncate font-mono text-xs leading-relaxed text-[#8E8E86]">{project.repo}</p>
+                  <p className="mt-1 truncate font-mono text-xs leading-relaxed text-[#8E8E86]">{project.repoOwner}/{project.repoName}</p>
+                  {project.deployedUrl && (
+                    <a
+                      href={project.deployedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-[#8E8E86] transition-colors hover:text-[#EDEDE8]"
+                    >
+                      Application <ExternalLink aria-hidden="true" size={12} />
+                    </a>
+                  )}
                 </div>
                 <div>
                   <p className="mb-1 font-mono text-xs uppercase tracking-wider text-[#8E8E86] xl:hidden">Health</p>
-                  <span className={`inline-flex items-center gap-2 text-sm font-medium ${project.tone === "high" ? "text-[#F59E0B]" : "text-emerald-400"}`}>
-                    <span className={`size-2 rounded-full ${project.tone === "high" ? "bg-[#F59E0B]" : "bg-emerald-400"}`} />
+                  <span className={`inline-flex items-center gap-2 text-sm font-medium ${project.tone === "muted" ? "text-[#A1A19A]" : "text-emerald-400"}`}>
+                    <span className={`size-2 rounded-full ${project.tone === "muted" ? "bg-[#77766F]" : "bg-emerald-400"}`} />
                     {project.health}
                   </span>
                 </div>
                 <div>
                   <p className="mb-1 font-mono text-xs uppercase tracking-wider text-[#8E8E86] xl:hidden">Active branch</p>
-                  <span className="font-mono text-sm text-[#D4D4CE]">{project.branch}</span>
+                  <span className="font-mono text-sm text-[#D4D4CE]">{project.defaultBranch}</span>
                 </div>
                 <div>
                   <p className="mb-1 font-mono text-xs uppercase tracking-wider text-[#8E8E86] xl:hidden">P95 latency</p>
@@ -251,7 +309,7 @@ export default function DashboardView() {
                     <Copy aria-hidden="true" size={14} /> Webhook
                   </button>
                   <a
-                    href={`https://github.com/${project.repo}`}
+                    href={`https://github.com/${project.repoOwner}/${project.repoName}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex min-h-8 items-center gap-1.5 rounded border border-transparent px-2.5 font-mono text-xs text-[#A1A19A] transition-colors hover:border-[#383730] hover:text-[#EDEDE8]"
@@ -328,24 +386,31 @@ export default function DashboardView() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setIsAddProjectOpen(false);
+            if (event.target === event.currentTarget && !isSubmitting) closeProjectDialog();
           }}
         >
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-project-title"
-            className="w-full max-w-md rounded-lg border border-[#2B2A24] bg-[#181816] p-6 shadow-2xl"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-[#2B2A24] bg-[#181816] p-6 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-mono text-xs tracking-wider text-[#8A8A82]">SERVICE REGISTRATION</p>
-                <h2 id="add-project-title" className="mt-2 text-xl font-semibold text-[#EDEDE8]">Add a project</h2>
-                <p className="mt-2 text-sm text-[#A1A19A]">Connect a repository to begin monitoring.</p>
+                <h2 id="add-project-title" className="mt-2 text-xl font-semibold text-[#EDEDE8]">
+                  {createdProject ? "Webhook setup" : "Add a project"}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-[#A1A19A]">
+                  {createdProject
+                    ? `${createdProject.name} is registered. Add this endpoint to your alert source.`
+                    : "Connect a GitHub repository and configure optional runtime remediation."}
+                </p>
               </div>
               <button
                 type="button"
-                onClick={() => setIsAddProjectOpen(false)}
+                onClick={closeProjectDialog}
+                disabled={isSubmitting}
                 aria-label="Close dialog"
                 className="flex size-8 shrink-0 items-center justify-center rounded border border-[#383730] text-[#A1A19A] transition-colors hover:text-[#EDEDE8]"
               >
@@ -353,26 +418,129 @@ export default function DashboardView() {
               </button>
             </div>
 
-            <form className="mt-6 flex flex-col gap-4" onSubmit={submitProject}>
-              <label className="flex flex-col gap-2 text-sm text-[#D4D4CE]">
-                Project name
-                <input required name="name" placeholder="e.g. Billing API" className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B]" />
-              </label>
-              <label className="flex flex-col gap-2 text-sm text-[#D4D4CE]">
-                Repository URL
-                <input required name="repository" type="url" placeholder="https://github.com/org/repository" className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B]" />
-              </label>
-              <label className="flex flex-col gap-2 text-sm text-[#D4D4CE]">
-                Branch
-                <input required name="branch" defaultValue="main" className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none focus:border-[#F59E0B]" />
-              </label>
-              <button
-                type="submit"
-                className="mt-1 inline-flex min-h-10 items-center justify-center gap-2 rounded bg-[#F59E0B] px-4 font-mono text-sm font-medium text-black transition-colors hover:bg-[#D97706]"
-              >
-                Connect Repository <Plus aria-hidden="true" size={16} />
-              </button>
-            </form>
+            {createdProject ? (
+              <div className="mt-6 flex flex-col gap-4">
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Generated ingestion webhook</p>
+                  <code className="mt-2 block break-all rounded border border-[#2B2A24] bg-[#121211] p-3 font-mono text-sm leading-relaxed text-[#D4D4CE]">
+                    {createdProject.webhookUrl}
+                  </code>
+                  <p className="mt-2 text-xs leading-relaxed text-[#8E8E86]">
+                    This URL contains the project API key. Keep it private and rotate it if it is exposed.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await copyText(createdProject.webhookUrl);
+                      setCopyMessage("Webhook URL copied.");
+                    } catch (error) {
+                      console.error("Unable to copy the new project webhook URL.", error);
+                      setCopyMessage(error instanceof Error ? error.message : "Could not copy webhook URL.");
+                    }
+                  }}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded bg-[#F59E0B] px-4 font-mono text-sm font-medium text-black transition-colors hover:bg-[#D97706]"
+                >
+                  <Copy aria-hidden="true" size={16} /> Copy Webhook URL
+                </button>
+                <p aria-live="polite" className="min-h-4 font-mono text-xs text-[#8E8E86]">{copyMessage}</p>
+                <p className="text-xs leading-relaxed text-[#8E8E86]">
+                  Send a JSON POST with <code className="text-[#D4D4CE]">serviceName</code>, <code className="text-[#D4D4CE]">message</code>, and <code className="text-[#D4D4CE]">stackTrace</code>.
+                </p>
+              </div>
+            ) : (
+              <form className="mt-6 flex flex-col gap-5" onSubmit={submitProject}>
+                <fieldset className="flex flex-col gap-4">
+                  <legend className="mb-3 font-mono text-xs uppercase tracking-wider text-[#F59E0B]">Required core fields</legend>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Project name" name="name" placeholder="e.g. Storefront API" required />
+                    <FormField label="Repository owner" name="repoOwner" placeholder="e.g. acme-corp" required />
+                    <FormField label="Repository name" name="repoName" placeholder="e.g. backend-api" required />
+                    <FormField
+                      label="GitHub personal access token"
+                      name="githubToken"
+                      type="password"
+                      placeholder="Fine-grained GitHub token"
+                      required
+                      helper="Requires Contents: Read & Write and Pull Requests: Read & Write."
+                    />
+                  </div>
+                </fieldset>
+
+                <fieldset className="flex flex-col gap-4 border-t border-[#2B2A24] pt-4">
+                  <legend className="mb-3 font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Optional baseline fields</legend>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField label="Default branch" name="defaultBranch" defaultValue="main" />
+                    <FormField label="Deployed URL" name="deployedUrl" type="url" placeholder="https://api.yourdomain.com" />
+                  </div>
+                </fieldset>
+
+                <fieldset className="flex flex-col gap-4 border-t border-[#2B2A24] pt-4">
+                  <legend className="mb-3 font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Deployment provider</legend>
+                  <label className="flex flex-col gap-1.5 text-sm text-[#D4D4CE]">
+                    Runtime configuration provider
+                    <select
+                      name="deploymentProvider"
+                      value={deploymentProvider}
+                      onChange={(event) => setDeploymentProvider(event.target.value as DeploymentProvider)}
+                      className={fieldClassName}
+                    >
+                      <option value="NONE">NONE — GitHub fixes only (No runtime env patching)</option>
+                      <option value="VERCEL">VERCEL — Vercel</option>
+                      <option value="RENDER">RENDER — Render</option>
+                      <option value="CUSTOM">CUSTOM — Custom Webhook</option>
+                    </select>
+                  </label>
+
+                  {deploymentProvider === "NONE" && (
+                    <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+                      Healix will handle automated code fixes and revert PRs on GitHub. Automated runtime configuration patching will be skipped.
+                    </p>
+                  )}
+
+                  {deploymentProvider === "VERCEL" && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <FormField label="Vercel Project ID" name="platformServiceId" placeholder="prj_xxxxxxxxxxxxxxxxxxxx" required helper="Found in Vercel Project Settings → General." />
+                      <FormField label="Vercel Access Token" name="platformApiToken" type="password" placeholder="Vercel personal access token" required helper="Generated under Vercel Account Settings → Tokens." />
+                      <FormField label="Vercel Team ID (optional)" name="platformTeamId" placeholder="team_xxxxxxxxxxxxxxxxxxxx" helper="Leave blank for a personal account." />
+                    </div>
+                  )}
+
+                  {deploymentProvider === "RENDER" && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <FormField label="Render Service ID" name="platformServiceId" placeholder="srv-xxxxxxxxxxxxxxxxxxxx" required helper="Found in the URL of your Render service dashboard." />
+                      <FormField label="Render API Key" name="platformApiToken" type="password" placeholder="Render API key" required helper="Generated under Render Account Settings → API Keys." />
+                    </div>
+                  )}
+
+                  {deploymentProvider === "CUSTOM" && (
+                    <FormField
+                      label="Custom webhook URL"
+                      name="customWebhookUrl"
+                      type="url"
+                      placeholder="https://infra.yourcompany.com/api/healix-patch"
+                      required
+                      helper="Healix sends configKey and configValue in an HMAC-SHA256 signed request using X-Healix-Signature."
+                    />
+                  )}
+                </fieldset>
+
+                {formError && (
+                  <p role="alert" className="rounded border border-rose-800/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
+                    {formError}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="mt-1 inline-flex min-h-10 items-center justify-center gap-2 rounded bg-[#F59E0B] px-4 font-mono text-sm font-medium text-black transition-colors hover:bg-[#D97706] disabled:cursor-wait disabled:opacity-70"
+                >
+                  {isSubmitting ? "Registering project..." : "Connect Repository"}
+                  {!isSubmitting && <Plus aria-hidden="true" size={16} />}
+                </button>
+              </form>
+            )}
           </section>
         </div>
       )}

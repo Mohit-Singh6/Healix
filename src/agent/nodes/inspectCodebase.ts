@@ -1,6 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import type { IncidentAgentState, IncidentAgentUpdate, CandidateCommit } from "../state";
 import { prisma } from "../../lib/prisma";
+import { decryptProjectSecret } from "../../lib/project-secrets";
 
 /**
  * Extracts candidate source file paths from a raw stack trace.
@@ -41,7 +42,9 @@ export async function inspectCodebaseNode(
 
   const owner = incident?.project?.repoOwner;
   const repo = incident?.project?.repoName;
-  const token = incident?.project?.githubToken || process.env.GITHUB_TOKEN;
+  const token = incident?.project?.githubToken
+    ? decryptProjectSecret(incident.project.githubToken)
+    : process.env.GITHUB_TOKEN;
 
   if (!token || !owner || !repo) {
     console.warn(`[Node B] GitHub credentials not fully configured. Skipping git inspection.`);

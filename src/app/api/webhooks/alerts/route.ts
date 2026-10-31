@@ -16,7 +16,7 @@ const alertPayloadSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     // 1. Auth Check: Verify x-project-key matches a registered Project
-    const apiKey = req.headers.get("x-project-key");
+    const apiKey = req.headers.get("x-project-key") ?? req.nextUrl.searchParams.get("apiKey");
     if (!apiKey) {
       return NextResponse.json(
         { error: "Unauthorized: Missing x-project-key header" },
