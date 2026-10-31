@@ -24,7 +24,7 @@ const projects = [
     webhook: "payment-gateway",
     incidents: 2,
     latency: "842 ms",
-    recentEvents: ["healthy", "healthy", "degraded", "healthy", "degraded"],
+    uptime: "98.7% uptime",
   },
   {
     name: "Auth Microservice",
@@ -35,7 +35,7 @@ const projects = [
     webhook: "auth-microservice",
     incidents: 0,
     latency: "96 ms",
-    recentEvents: ["healthy", "healthy", "healthy", "healthy", "healthy"],
+    uptime: "99.99% uptime",
   },
   {
     name: "Orders API",
@@ -46,7 +46,7 @@ const projects = [
     webhook: "orders-api",
     incidents: 1,
     latency: "128 ms",
-    recentEvents: ["healthy", "deploy", "healthy", "healthy", "healthy"],
+    uptime: "99.95% uptime",
   },
 ];
 
@@ -59,7 +59,7 @@ const incidents = [
     volume: "1,284 events",
     age: "4 min ago",
     tone: "critical" as const,
-    status: "PENDING_APPROVAL",
+    status: "PENDING_OPERATOR_APPROVAL",
     target: "src/payments/charge.ts:createCharge",
   },
   {
@@ -70,7 +70,7 @@ const incidents = [
     volume: "342 events",
     age: "18 min ago",
     tone: "high" as const,
-    status: "PENDING_APPROVAL",
+    status: "PENDING_OPERATOR_APPROVAL",
     target: "src/orders/create-order.ts:createOrder",
   },
   {
@@ -160,14 +160,15 @@ export default function DashboardView() {
           label="Active Services"
           value="12"
           detail={
-            <div className="flex items-center gap-1.5" role="img" aria-label="12 services, 10 healthy and 2 degraded">
-              {Array.from({ length: 12 }, (_, index) => (
-                <span
-                  key={index}
-                  className={`h-3.5 w-1.5 rounded-sm ${index === 3 || index === 8 ? "bg-[#F59E0B]" : "bg-emerald-500"}`}
-                />
-              ))}
-              <span className="ml-1 text-xs text-[#8E8E86]">All webhooks active</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs">
+              <span className="inline-flex items-center gap-1.5 text-emerald-400">
+                <span className="size-2 rounded-full bg-emerald-500" />
+                11 healthy
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-amber-400">
+                <span className="size-2 animate-pulse rounded-full bg-amber-500" />
+                1 degraded
+              </span>
             </div>
           }
         />
@@ -200,7 +201,7 @@ export default function DashboardView() {
         </div>
         <div className="overflow-hidden rounded-lg border border-[#232320] bg-[#181816]">
           <div className="hidden grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_repeat(3,minmax(100px,.65fr))_minmax(190px,1fr)] items-center gap-4 border-b border-[#2B2A24] bg-[#141412] px-5 py-3 font-mono text-xs uppercase tracking-wider text-[#8E8E86] xl:grid">
-            <span>Service / Event Spectrum</span><span>Health</span><span>Branch</span><span>P95 Latency</span><span>Open Incidents</span><span>Actions</span>
+            <span>Service / Uptime</span><span>Health</span><span>Branch</span><span>P95 Latency</span><span>Open Incidents</span><span>Actions</span>
           </div>
           <div className="divide-y divide-[#262520]">
             {projects.map((project) => (
@@ -209,18 +210,10 @@ export default function DashboardView() {
                 className="grid gap-4 px-4 py-4 transition-colors hover:bg-[#1D1D19] sm:px-5 xl:grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_repeat(3,minmax(100px,.65fr))_minmax(190px,1fr)] xl:items-center"
               >
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-semibold text-[#EDEDE8]">{project.name}</h3>
-                    <span className="flex items-center gap-1" role="img" aria-label="Recent event rolling spectrum">
-                      {project.recentEvents.map((event, index) => (
-                        <span
-                          key={`${event}-${index}`}
-                          title={event}
-                          className={`h-2.5 w-3 rounded-sm ${
-                            event === "degraded" ? "bg-[#F59E0B]/80" : event === "deploy" ? "bg-sky-400/70" : "bg-emerald-500/70"
-                          }`}
-                        />
-                      ))}
+                    <span className="rounded border border-[#2B2A24] bg-[#1E1E1B] px-2 py-0.5 font-mono text-xs text-[#8E8E86]">
+                      {project.uptime}
                     </span>
                   </div>
                   <p className="mt-1 truncate font-mono text-xs leading-relaxed text-[#8E8E86]">{project.repo}</p>
@@ -288,23 +281,22 @@ export default function DashboardView() {
             <article
               key={incident.id}
               className={`relative overflow-hidden rounded-lg border bg-[#181816] p-4 transition-colors sm:p-5 ${
-                incident.status === "PENDING_APPROVAL" ? "border-[#F59E0B]/40 hover:border-[#F59E0B]/70" : "border-[#262520] hover:border-[#383730]"
+                incident.status === "PENDING_OPERATOR_APPROVAL" ? "border-amber-500/40 hover:border-amber-500/70" : "border-[#232320] hover:border-[#383730]"
               }`}
             >
-              {incident.status === "PENDING_APPROVAL" && (
-                <span aria-label="Pending operator approval" title="Pending operator approval" className="absolute inset-y-0 left-0 w-1 animate-pulse bg-[#F59E0B]" />
-              )}
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <StatusBadge tone={incident.tone}>
-                      {incident.severity === "CRITICAL" ? <CircleAlert aria-hidden="true" size={14} /> : <ArrowDownRight aria-hidden="true" size={14} />}
-                      {incident.severity}
-                    </StatusBadge>
-                    <span className="font-mono text-sm font-semibold text-[#EDEDE8]">{incident.id}</span>
-                    {incident.status === "PENDING_APPROVAL" && (
-                      <span className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold uppercase tracking-wider text-[#F59E0B]">
-                        <span className="size-1.5 animate-pulse rounded-full bg-[#F59E0B]" /> Pending operator approval
+                  <div className="flex flex-wrap items-center justify-start gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <StatusBadge tone={incident.tone}>
+                        {incident.severity === "CRITICAL" ? <CircleAlert aria-hidden="true" size={14} /> : <ArrowDownRight aria-hidden="true" size={14} />}
+                        {incident.severity}
+                      </StatusBadge>
+                      <span className="font-mono text-sm font-semibold text-[#EDEDE8]">{incident.id}</span>
+                    </div>
+                    {incident.status === "PENDING_OPERATOR_APPROVAL" && (
+                      <span className="inline-flex items-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 font-mono text-xs font-medium text-amber-400">
+                        Action Required: Awaiting Your Review
                       </span>
                     )}
                   </div>
@@ -317,7 +309,11 @@ export default function DashboardView() {
                   <span className="font-mono text-xs text-[#8E8E86]">{incident.age}</span>
                   <Link
                     href={`/incidents/${incident.id}`}
-                    className="inline-flex items-center gap-1 rounded bg-[#262520] px-3 py-2 font-mono text-xs text-[#EDEDE8] transition-colors hover:bg-[#F59E0B] hover:text-black"
+                    className={`inline-flex items-center gap-1 rounded px-3 py-2 font-mono text-xs transition-colors ${
+                      incident.status === "PENDING_OPERATOR_APPROVAL"
+                        ? "bg-[#F59E0B] font-semibold text-black hover:bg-[#D97706]"
+                        : "bg-[#1E1E1B] text-[#D4D4CE] hover:bg-[#282723]"
+                    }`}
                   >
                     Investigate <ArrowRight aria-hidden="true" size={14} />
                   </Link>

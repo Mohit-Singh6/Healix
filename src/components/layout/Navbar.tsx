@@ -51,7 +51,7 @@ function OperatorMenu() {
           <button
             type="button"
             onClick={logOut}
-            className="flex w-full items-center justify-between rounded px-3 py-2 text-left font-mono text-xs text-rose-400 transition-colors hover:bg-rose-950/30"
+            className="flex w-full items-center justify-between rounded px-3 py-2 text-left font-mono text-xs text-[#EDEDE8] transition-colors hover:bg-rose-950/10 hover:text-rose-200"
           >
             Log Out <LogOut aria-hidden="true" size={14} />
           </button>
