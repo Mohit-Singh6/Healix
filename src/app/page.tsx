@@ -1,38 +1,14 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, ChevronRight, GitBranch, ShieldCheck } from "lucide-react";
+import { ArrowRight, GitBranch, ShieldCheck } from "lucide-react";
+import RemediationLoop from "@/src/components/landing/RemediationLoop";
 
-const integrations = ["PagerDuty", "Sentry", "Datadog", "GitHub", "Slack"];
-
-const pipeline = [
-  {
-    number: "01",
-    title: "Telemetry Ingestion",
-    detail: "Webhook capture, error logs, and stack-trace parsing",
-    trace: "POST /api/v1/webhooks/pagerduty (200 OK)",
-    traceClassName: "text-[#A1A19A]",
-  },
-  {
-    number: "02",
-    title: "AST & Blame Correlation",
-    detail: "Vector search over repo graph and commit history",
-    trace: "git blame -L 41,45 (commit 4fa01b)",
-    traceClassName: "text-[#A1A19A]",
-  },
-  {
-    number: "03",
-    title: "Sandboxed Diagnostic & Patch",
-    detail: "LLM-driven fix verification with automated test suites",
-    trace: "✓ 14 unit tests passed in isolated vm",
-    traceClassName: "text-[#10B981]",
-  },
-  {
-    number: "04",
-    title: "Ready-to-Merge Pull Request",
-    detail: "Complete branch with forensic context and one-click deployment",
-    trace: "branch: healix/fix-cache-refresh-leak",
-    traceClassName: "text-[#A1A19A]",
-  },
+const integrations = [
+  { name: "PagerDuty", href: "https://www.pagerduty.com/" },
+  { name: "Sentry", href: "https://sentry.io/" },
+  { name: "Datadog", href: "https://www.datadoghq.com/" },
+  { name: "GitHub", href: "https://github.com/" },
+  { name: "Slack", href: "https://slack.com/" },
 ];
 
 const footerGroups = [
@@ -46,7 +22,7 @@ const footerGroups = [
   },
   {
     title: "Integrations",
-    links: integrations.map((label) => ({ label, href: "/#integrations" })),
+    links: integrations.map(({ name }) => ({ label: name, href: "/#integrations" })),
   },
   {
     title: "Documentation",
@@ -59,7 +35,7 @@ const footerGroups = [
   {
     title: "Security & Legal",
     links: [
-      { label: "Sandboxing", href: "/#capabilities" },
+      { label: "API access", href: "/#capabilities" },
       { label: "Human approval", href: "/#capabilities" },
       { label: "Privacy", href: "/#contact" },
     ],
@@ -71,18 +47,18 @@ export default function Home() {
     <main className="min-h-screen flex-1 bg-[#121211] text-[#EDEDE8]">
       <div className="mx-auto w-full max-w-[1440px] px-5 sm:px-8 lg:px-12">
         <section className="grid gap-12 border-b border-[#2B2A24] py-16 sm:py-20 lg:grid-cols-[1fr_0.92fr] lg:items-center lg:gap-16 lg:py-24">
-          <div>
+          <div className="min-w-0">
             <Link
               href="#architecture"
               className="mb-6 inline-flex cursor-pointer items-center rounded-full border border-[#2B2A24] bg-[#1B1B18] px-3 py-1 font-mono text-xs text-[#E2E2DC] transition-colors hover:border-[#F59E0B]/50"
             >
-              v1.4 • Autonomous PR Synthesis for GitHub &amp; GitLab →
+              v1.4 • API-Driven PR Drafting for GitHub →
             </Link>
             <h1 className="max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight text-[#E2E2DC] sm:text-5xl lg:text-6xl">
               Self-Healing Code. Zero 3 AM Alert Fatigue.
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-7 text-[#A1A19A] sm:text-lg sm:leading-8">
-              Healix maps production telemetry to the code and commit that caused it, then diagnoses the root cause and generates a verified pull request in an isolated sandbox.
+              Healix maps production telemetry to the offending commit, diagnoses the root cause, and safely drafts a pull request for your team to review.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
               <Link
@@ -104,16 +80,23 @@ export default function Home() {
               </p>
               <ul className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-xs uppercase tracking-wider text-[#7A7A72]">
                 {integrations.map((integration) => (
-                  <li key={integration} className="transition-colors hover:text-[#E2E2DC]">
-                    [ {integration} ]
+                  <li key={integration.name}>
+                    <a
+                      href={integration.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="transition-colors hover:text-[#E2E2DC]"
+                    >
+                      {integration.name}
+                    </a>
                   </li>
                 ))}
               </ul>
             </div>
           </div>
 
-          <article className="overflow-hidden rounded-lg border border-[#232320] bg-[#1B1B18] transition-colors hover:border-[#383730]">
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2B2A24] px-5 py-4 sm:px-6">
+          <article className="flex h-auto w-full min-w-0 max-w-xl flex-col overflow-hidden rounded-lg border border-[#232320] bg-[#1B1B18] transition-colors hover:border-[#383730] lg:justify-self-end">
+            <header className="terminal-reveal terminal-delay-1 flex flex-wrap items-center justify-between gap-3 border-b border-[#2B2A24] px-5 py-4 sm:px-6">
               <p className="font-mono text-xs font-medium tracking-wide text-[#E2E2DC]">
                 INCIDENT #842: SEV-2 LATENCY SPIKE
               </p>
@@ -121,23 +104,23 @@ export default function Home() {
                 Investigating
               </span>
             </header>
-            <div className="px-5 py-5 sm:px-6">
+            <div className="terminal-reveal terminal-delay-2 px-5 py-5 sm:px-6">
               <div className="flex items-center justify-between gap-4">
                 <p className="font-mono text-xs text-[#A1A19A]">src/api/cache.ts · blame correlation</p>
                 <GitBranch aria-hidden="true" size={15} className="shrink-0 text-[#A1A19A]" />
               </div>
-              <div className="mt-5 overflow-x-auto rounded-md border border-[#232320] bg-[#121211] p-4 font-mono text-xs leading-7 transition-colors hover:border-[#383730]">
-                <p className="text-[#77766F]">@@ -41,7 +41,7 @@ async function getCachedRecord</p>
-                <p className="whitespace-pre text-[#A1A19A]">  const record = await cache.get(key);</p>
-                <p className="whitespace-pre bg-[#EF4444]/10 text-[#EF4444]">
+              <div className="mt-5 min-w-0 overflow-hidden rounded-md border border-[#232320] bg-[#121211] p-4 font-mono text-xs leading-7 transition-colors hover:border-[#383730]">
+                <p className="break-words text-[#77766F]">@@ -41,7 +41,7 @@ async function getCachedRecord</p>
+                <p className="break-words text-[#A1A19A]">  const record = await cache.get(key);</p>
+                <p className="break-words bg-[#EF4444]/10 text-[#EF4444]">
                   <span className="mr-3 select-none">-</span>
                   <span className="line-through">  await refreshAllRecords();</span>
                 </p>
-                <p className="whitespace-pre bg-[#10B981]/10 text-[#10B981]">
+                <p className="break-words bg-[#10B981]/10 text-[#10B981]">
                   <span className="mr-3 select-none">+</span>
-                  <span>  if (!record) await refreshRecord(key);</span>
+                  <span className="terminal-type">  if (!record) await refreshRecord(key);</span>
                 </p>
-                <p className="whitespace-pre text-[#A1A19A]">  return record;</p>
+                <p className="break-words text-[#A1A19A]">  return record;</p>
               </div>
               <div className="mt-5 flex items-start gap-3 border-l-2 border-[#F59E0B] pl-4">
                 <ShieldCheck aria-hidden="true" size={17} className="mt-0.5 shrink-0 text-[#F59E0B]" />
@@ -146,44 +129,15 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <footer className="border-t border-[#2B2A24] px-5 py-4 sm:px-6">
+            <footer className="terminal-reveal terminal-delay-footer border-t border-[#2B2A24] px-5 py-4 sm:px-6">
               <p className="font-mono text-[11px] leading-5 text-[#10B981]">
-                Automated PR #142 Ready to Merge • Verified in Sandbox (4.2s)
+                Automated PR #142 Drafted • Pending Human Approval
               </p>
             </footer>
           </article>
         </section>
 
-        <section id="architecture" className="scroll-mt-24 border-b border-[#2B2A24] py-16 sm:py-20">
-          <div className="mb-9 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-[0.15em] text-[#F59E0B]">The remediation loop</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">From raw signal to reviewed fix.</h2>
-            </div>
-            <p className="max-w-md text-sm leading-6 text-[#A1A19A]">
-              Every step preserves the evidence trail, from the first webhook to the branch your team reviews.
-            </p>
-          </div>
-          <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {pipeline.map((step, index) => (
-              <li key={step.number} className="relative min-h-52 border border-[#232320] bg-[#1B1B18] p-5 transition-colors hover:border-[#383730] md:p-6">
-                <div className="flex items-center gap-3 font-mono text-xs tracking-wide text-[#F59E0B]">
-                  <span>{step.number}</span>
-                  <span aria-hidden="true" className="h-px flex-1 bg-[#2B2A24]" />
-                  {index < pipeline.length - 1 && (
-                    <ChevronRight aria-hidden="true" size={14} className="hidden text-[#77766F] xl:block" />
-                  )}
-                  <span className="text-[#77766F]">/ PIPELINE</span>
-                </div>
-                <h3 className="mt-7 text-lg font-semibold leading-6 text-[#E2E2DC]">{step.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-[#A1A19A]">{step.detail}</p>
-                <p className={`mt-5 inline-flex max-w-full rounded-sm border border-[#2B2A24] bg-[#121211] px-2 py-1 font-mono text-[10px] leading-5 break-all ${step.traceClassName}`}>
-                  {step.trace}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </section>
+        <RemediationLoop />
 
         <section id="capabilities" className="scroll-mt-24 border-b border-[#2B2A24] py-16 sm:py-20">
           <div className="mb-9">
@@ -191,19 +145,22 @@ export default function Home() {
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Autonomy, with guardrails.</h2>
           </div>
           <div className="grid gap-4 lg:grid-cols-3 lg:grid-rows-[minmax(230px,auto)_minmax(210px,auto)]">
-            <article className="rounded-lg border border-[#232320] bg-[#1B1B18] p-6 transition-colors hover:border-[#383730] sm:p-8 lg:col-span-2">
-              <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">01 / Execution safety</p>
-              <h3 className="mt-4 text-2xl font-semibold tracking-tight">Deterministic Guardrails &amp; Sandboxing</h3>
+            <article className="group rounded-lg border border-[#232320] bg-[#1B1B18] p-6 transition-colors hover:border-[#383730] sm:p-8 lg:col-span-2">
+              <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">01 / Human approval gate</p>
+              <h3 className="mt-4 text-2xl font-semibold tracking-tight">Zero-Risk API Architecture</h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-[#A1A19A]">
-                Proposed changes run in an isolated environment. The patch is held until required checks pass.
+                Healix doesn&apos;t execute untrusted code or require complex microVMs. It acts securely through your existing APIs—drafting Git branches and staging config updates. Your production environment is protected by a strict Human-in-the-Loop approval gate.
               </p>
-              {/* Static terminal preview; wire this panel to live sandbox runs when telemetry is available. */}
+              {/* Static API handoff preview; wire this panel to live pull request events when available. */}
               <div className="mt-6 rounded-md border border-[#232320] bg-[#121211] p-4 font-mono text-xs leading-6 transition-colors hover:border-[#383730]">
-                <p className="text-[#77766F]">$ healix verify --branch fix/cache-refresh</p>
-                <p className="mt-2 text-[#A1A19A]">[1/3] unit tests <span className="text-[#10B981]">passed</span></p>
-                <p className="text-[#A1A19A]">[2/3] regression suite <span className="text-[#10B981]">passed</span></p>
-                <p className="text-[#A1A19A]">[3/3] patch policy <span className="text-[#10B981]">verified</span></p>
-                <p className="mt-2 text-[#10B981]">Sandbox complete · 4.2s · awaiting review</p>
+                <p className="text-[#A1A19A]">&gt; Analyzing stack trace... <span className="text-[#10B981]">[DONE]</span></p>
+                <p className="text-[#A1A19A]">&gt; Formulating patch hypothesis... <span className="text-[#10B981]">[DONE]</span></p>
+                <p className="mt-2 break-all text-[#A1A19A]">&gt; POST https://api.github.com/repos/org/repo/pulls</p>
+                <p className="mt-2 text-[#10B981]">[✓] Pull Request #142 Drafted Successfully</p>
+                <p className="mt-2 text-[#F59E0B]">⏸ EXECUTION PAUSED: Awaiting Operator Approval</p>
+                <p className="text-[#A1A19A] opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+                  &gt; Human Approval Gate: required
+                </p>
               </div>
             </article>
 
@@ -211,7 +168,7 @@ export default function Home() {
               <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">02 / Operator control</p>
               <h3 className="mt-4 text-xl font-semibold">Human-in-the-Loop Safeguards</h3>
               <p className="mt-3 text-sm leading-6 text-[#A1A19A]">
-                Require an operator sign-off before a verified change can merge.
+                Require an operator sign-off before a drafted change can merge.
               </p>
               <div className="mt-7 flex items-center justify-between border-t border-[#2B2A24] pt-5">
                 <span className="text-sm text-[#E2E2DC]">Approval required</span>
@@ -237,12 +194,12 @@ export default function Home() {
               </div>
             </article>
 
-            <article className="rounded-lg border border-[#232320] bg-[#1B1B18] p-6 transition-colors hover:border-[#383730] sm:p-8 lg:col-span-2">
+            <article className="group rounded-lg border border-[#232320] bg-[#1B1B18] p-6 transition-colors hover:border-[#383730] sm:p-8 lg:col-span-2">
               <p className="font-mono text-xs uppercase tracking-wider text-[#F59E0B]">04 / Incident impact</p>
               {/* Static illustrative metrics; replace with verified customer telemetry before publishing live results. */}
               <div className="mt-6 grid gap-6 sm:grid-cols-2 sm:gap-10">
                 <div>
-                  <p className="text-4xl font-semibold tracking-tight text-[#F59E0B] sm:text-5xl">94%</p>
+                  <p className="inline-block text-4xl font-semibold tracking-tight text-[#F59E0B] transition-transform group-hover:scale-105 sm:text-5xl">94%</p>
                   <p className="mt-2 text-sm text-[#A1A19A]">MTTR Reduction</p>
                 </div>
                 <div>
@@ -260,7 +217,7 @@ export default function Home() {
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">The alert still arrives. The night changes.</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <article className="rounded-lg border border-[#232320] bg-[#121211] p-6 text-[#70706B] transition-colors hover:border-[#383730] sm:p-8">
+            <article className="rounded-lg border border-[#232320] bg-[#121211] p-6 text-[#70706B] opacity-40 transition-[border-color,opacity] duration-700 hover:border-[#383730] hover:opacity-100 sm:p-8">
               <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">Traditional incident response</p>
               <ol className="mt-6 flex flex-col gap-4">
                 {[
@@ -273,7 +230,7 @@ export default function Home() {
                   <li key={event} className="flex gap-4">
                     <span className="w-16 shrink-0 font-mono text-xs text-[#77766F]">{time}</span>
                     <span className="relative flex-1 border-l border-[#2B2A24] pb-1 pl-4 text-sm text-[#70706B]">
-                      <span aria-hidden="true" className="absolute -left-1 top-1 size-2 rounded-full border border-red-800/40 bg-red-950 text-red-400" />
+                      <span aria-hidden="true" className={`absolute -left-1 top-1 size-2 rounded-full border border-red-800/40 bg-red-950 text-red-400 ${index === 4 ? "animate-pulse motion-reduce:animate-none" : ""}`} />
                       {index === 4 ? <span className="line-through">{event}</span> : event}
                     </span>
                   </li>
@@ -285,8 +242,8 @@ export default function Home() {
               <ol className="mt-6 flex flex-col gap-4">
                 {[
                   ["3:00 AM", "Alert captured"],
-                  ["3:01 AM", "Automated triage & verification"],
-                  ["3:04 AM", "Verified PR ready in inbox"],
+                  ["3:01 AM", "Automated triage & API draft"],
+                  ["3:04 AM", "Draft PR ready in inbox"],
                   ["9:00 AM", "One-click review"],
                 ].map(([time, event], index) => (
                   <li key={event} className="flex gap-4">
@@ -327,21 +284,25 @@ export default function Home() {
         <footer className="py-12">
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4 lg:grid-cols-5">
             <div className="col-span-2 sm:col-span-4 lg:col-span-1">
-              <Link href="/" className="inline-flex items-center gap-2" aria-label="Healix home">
-                <Image
-                  src="/Healix_Logo-clean.png"
-                  alt=""
-                  width={28}
-                  height={28}
-                  className="size-7 object-contain"
-                />
-                <Image
-                  src="/Healix_Text_Logo.png"
-                  alt="Healix"
-                  width={64}
-                  height={33}
-                  className="h-7 w-auto object-contain"
-                />
+              <Link href="/" aria-label="Healix home">
+                <div className="flex items-center gap-2">
+                  <Image
+                    src="/Healix_Logo-clean.png"
+                    alt=""
+                    width={28}
+                    height={28}
+                    unoptimized
+                    className="h-7 w-auto object-contain"
+                  />
+                  <Image
+                    src="/Healix_Text_Logo.png"
+                    alt="Healix"
+                    width={54}
+                    height={28}
+                    unoptimized
+                    className="h-7 w-auto object-contain"
+                  />
+                </div>
               </Link>
               <p className="mt-3 max-w-xs text-sm leading-6 text-[#A1A19A]">
                 Incident response with evidence, guardrails, and human control.

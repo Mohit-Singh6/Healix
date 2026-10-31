@@ -9,7 +9,6 @@ import {
   Clock3,
   GitCommitHorizontal,
   Pause,
-  ShieldAlert,
   Sparkles,
 } from "lucide-react";
 import StatusBadge from "@/src/components/ui/StatusBadge";
@@ -33,9 +32,9 @@ const incidentDetails: Record<string, { service: string; signature: string; age:
 };
 
 const tabs = [
-  { id: "commits", label: "Culprit Commits", node: "NODE B" },
-  { id: "logs", label: "Correlated Logs", node: "NODE A" },
-  { id: "trace", label: "Raw Crash Stack Trace", node: "RAW PAYLOAD" },
+  { id: "diff", label: "[ Suspect Diff ]" },
+  { id: "logs", label: "[ Correlated Logs (±10m) ]" },
+  { id: "trace", label: "[ Raw Trace ]" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -49,7 +48,7 @@ const logLines = [
 ];
 
 export default function IncidentWorkbench({ incidentId }: { incidentId: string }) {
-  const [activeTab, setActiveTab] = useState<TabId>("commits");
+  const [activeTab, setActiveTab] = useState<TabId>("diff");
   const [copyMessage, setCopyMessage] = useState("");
   const incident = incidentDetails[incidentId] ?? {
     service: "Payment Gateway",
@@ -73,104 +72,103 @@ export default function IncidentWorkbench({ incidentId }: { incidentId: string }
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] px-5 pb-24 pt-10 sm:px-8 sm:pt-14 lg:px-12">
-      <Link href="/dashboard" className="inline-flex items-center gap-2 text-base font-semibold text-slate-400 transition hover:text-cyan-200">
-        <ArrowLeft aria-hidden="true" size={18} />
-        Back to War Room
+    <main className="mx-auto w-full max-w-[1600px] flex-1 bg-[#121211] px-5 pb-20 pt-8 text-[#EDEDE8] sm:px-8 lg:px-12">
+      <Link href="/dashboard" className="inline-flex items-center gap-2 font-mono text-xs text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
+        <ArrowLeft aria-hidden="true" size={14} />
+        War Room
       </Link>
 
-      <header className="mt-7 flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
-        <div>
+      <header className="mt-6 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
-            <p className="eyebrow">INCIDENT FORENSICS</p>
-            <StatusBadge tone="critical"><span className="size-2 rounded-full bg-current" /> CRITICAL</StatusBadge>
-            <StatusBadge tone="muted"><Clock3 aria-hidden="true" size={14} /> {incident.age}</StatusBadge>
+            <p className="font-mono text-xs tracking-wider text-[#8A8A82]">INCIDENT FORENSICS</p>
+            <StatusBadge tone="critical"><span className="size-1.5 rounded-full bg-current" /> CRITICAL</StatusBadge>
+            <StatusBadge tone="muted"><Clock3 aria-hidden="true" size={12} /> {incident.age}</StatusBadge>
+            <StatusBadge tone="muted">{incident.service}</StatusBadge>
           </div>
-          <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-white sm:text-5xl">{incidentId}</h1>
-          <p className="mt-3 text-lg text-slate-300">{incident.service} <span className="mx-2 text-slate-600">/</span> {incident.signature}</p>
+          <h1 className="mt-3 font-mono text-3xl font-semibold tracking-tight text-[#EDEDE8] sm:text-4xl">{incidentId}</h1>
+          <p className="mt-2 max-w-4xl break-words font-mono text-sm text-[#A1A19A]">{incident.signature}</p>
         </div>
-        <div className="flex flex-col items-start gap-2 xl:items-end">
+        <div className="flex flex-col items-start gap-1 lg:items-end">
           <button
             type="button"
             onClick={copyThreadId}
-            className="inline-flex h-12 items-center gap-2 rounded-xl border border-cyan-400/25 bg-cyan-400/[0.06] px-5 text-base font-semibold text-cyan-100 transition hover:border-cyan-300/60 hover:bg-cyan-400/[0.12]"
+            className="inline-flex min-h-9 items-center gap-2 rounded border border-[#383730] bg-[#1B1B18] px-3 font-mono text-xs text-[#A1A19A] transition-colors hover:text-[#EDEDE8]"
           >
-            {copyMessage === "Thread ID copied." ? <Check aria-hidden="true" size={18} /> : <Clipboard aria-hidden="true" size={18} />}
+            {copyMessage === "Thread ID copied." ? <Check aria-hidden="true" size={14} /> : <Clipboard aria-hidden="true" size={14} />}
             Copy Thread ID
           </button>
-          <p aria-live="polite" className="min-h-5 text-sm text-cyan-200/80">{copyMessage}</p>
+          <p aria-live="polite" className="min-h-4 text-[11px] text-[#8A8A82]">{copyMessage}</p>
         </div>
       </header>
 
-      <section aria-labelledby="diagnosis-heading" className="glass-card relative mt-9 overflow-hidden rounded-3xl p-6 sm:p-8">
-        <div className="absolute -right-10 -top-20 size-64 rounded-full bg-cyan-400/[0.08] blur-[90px]" />
-        <div className="relative">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="flex size-12 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200">
-                <Sparkles aria-hidden="true" size={22} />
-              </span>
-              <div>
-                <p className="eyebrow">NODE C / GEMINI DIAGNOSIS</p>
-                <h2 id="diagnosis-heading" className="mt-1 text-2xl font-bold text-white">Root-cause hypothesis</h2>
-              </div>
-            </div>
-            <StatusBadge tone="ready" className="min-h-10 px-4 text-sm">RECOMMENDED ACTION&nbsp; / &nbsp;REVERT_PR</StatusBadge>
-          </div>
-
-          <div className="mt-7 grid gap-6 lg:grid-cols-[1fr_300px]">
-            <div className="rounded-2xl border border-white/[0.07] bg-[#080e1a]/75 p-5 sm:p-6">
-              <p className="text-lg leading-8 text-slate-200">
-                A recent change removed the fallback currency mapping from the payment intent path. When a merchant profile omits a currency, the charge handler dereferences an undefined value and returns HTTP 500.
-              </p>
-              <div className="mt-5 flex flex-wrap items-center gap-3 text-base text-slate-400">
-                <GitCommitHorizontal aria-hidden="true" size={19} className="text-cyan-300" />
-                Suspected commit <code className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.06] px-2 py-1 font-mono text-cyan-200">a81c4d2</code>
-                <span>by <span className="text-slate-200">maya.chen</span></span>
-              </div>
-            </div>
-            <div className="flex flex-col justify-center rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.04] p-5">
-              <p className="text-sm font-bold tracking-wider text-slate-400">MODEL CONFIDENCE</p>
-              <p className="mt-2 text-4xl font-extrabold text-cyan-200">94<span className="text-2xl">%</span></p>
-              <p className="mt-2 text-base leading-6 text-slate-400">Evidence agrees across the exception, correlated logs, and latest diff.</p>
-            </div>
+      <section
+        aria-labelledby="approval-heading"
+        className="mt-7 flex flex-col justify-between gap-5 rounded-lg border border-[#D97706]/40 bg-[#1E1C14] p-5 lg:flex-row lg:items-center"
+      >
+        <div className="flex items-start gap-4">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-[#D97706]/30 bg-[#F59E0B]/10 text-[#F59E0B]">
+            <Pause aria-hidden="true" size={18} />
+          </span>
+          <div>
+            <p className="font-mono text-xs tracking-wide text-[#F59E0B]">
+              ⏸ EXECUTION INTERRUPTED AT NODE D (Human Approval Gate)
+            </p>
+            <h2 id="approval-heading" className="mt-2 text-lg font-semibold text-[#EDEDE8]">Review the proposed change</h2>
+            <p className="mt-1 text-sm leading-6 text-[#A1A19A]">
+              Gemini staged fix branch <code className="font-mono text-[#D4D4CE]">&apos;fix/currency-deref&apos;</code>. Awaiting operator review.
+            </p>
           </div>
         </div>
-      </section>
-
-      <section aria-labelledby="approval-heading" className="mt-6 rounded-2xl border border-blue-400/25 bg-gradient-to-r from-blue-950/45 via-[#0c1427]/90 to-cyan-950/30 p-6 shadow-[0_0_32px_rgba(37,99,235,0.08)] sm:p-8">
-        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-blue-300/[0.08] text-blue-200">
-              <Pause aria-hidden="true" size={22} />
-            </span>
-            <div>
-              <p className="eyebrow text-blue-200">NODE D / HUMAN APPROVAL STATION</p>
-              <h2 id="approval-heading" className="mt-2 text-2xl font-bold text-white">Execution paused for your review</h2>
-              <p className="mt-2 max-w-3xl text-base leading-7 text-slate-300">
-                LangGraph is paused at <code className="font-mono text-cyan-200">interrupt()</code>. Healix will not open or merge a pull request until a human reviews the recommendation.
-              </p>
-            </div>
-          </div>
+        <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
           <button
             type="button"
             disabled
-            title="Pull request approval is available in Phase 4."
-            className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-5 text-base font-bold text-cyan-100 opacity-60"
+            title="Pull request approval is not connected in this preview."
+            className="inline-flex min-h-9 items-center justify-center rounded bg-[#F59E0B] px-4 font-mono text-xs font-semibold text-black transition-colors hover:bg-[#D97706] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <ShieldAlert aria-hidden="true" size={19} />
-            Approve PR (Available in Phase 4)
+            [ Approve &amp; Open PR ]
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Incident dismissal is not connected in this preview."
+            className="inline-flex min-h-9 items-center justify-center rounded border border-[#383730] bg-transparent px-4 font-mono text-xs text-[#8A8A82] transition-colors hover:text-[#EDEDE8] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            [ Dismiss Incident ]
           </button>
         </div>
       </section>
 
-      <section className="mt-12">
-        <div className="mb-5">
-          <p className="eyebrow">INVESTIGATION EVIDENCE</p>
-          <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Forensic timeline</h2>
-        </div>
-        <div className="glass-card overflow-hidden rounded-2xl">
-          <div role="tablist" aria-label="Forensic evidence" className="flex overflow-x-auto border-b border-white/10 bg-white/[0.025]">
+      <section aria-label="Forensic evidence" className="mt-7 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+        <article className="rounded-lg border border-[#262520] bg-[#181816] p-5">
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-md border border-[#383730] bg-[#121211] text-[#F59E0B]">
+              <Sparkles aria-hidden="true" size={17} />
+            </span>
+            <div>
+              <p className="font-mono text-[11px] tracking-wider text-[#8A8A82]">ROOT-CAUSE ANALYSIS</p>
+              <h2 className="mt-1 text-base font-semibold text-[#EDEDE8]">Diagnosis &amp; cause</h2>
+            </div>
+          </div>
+          <p className="mt-5 text-sm leading-relaxed text-[#D4D4CE]">
+            A recent change removed the fallback currency mapping from the payment intent path. When a merchant profile omits a currency, the charge handler dereferences an undefined value and returns HTTP 500.
+          </p>
+          <div className="mt-5 border-t border-[#262520] pt-4">
+            <p className="font-mono text-[11px] uppercase tracking-wider text-[#8A8A82]">Suspect commit</p>
+            <p className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded border border-[#383730] bg-[#121211] px-2.5 py-1.5 font-mono text-xs text-[#D4D4CE]">
+              <GitCommitHorizontal aria-hidden="true" size={14} className="text-[#F59E0B]" />
+              commit a81c4d2 by maya.chen
+            </p>
+          </div>
+          <div className="mt-5 flex items-center justify-between border-t border-[#262520] pt-4">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-[#8A8A82]">Model confidence</span>
+            <span className="font-mono text-sm text-[#F59E0B]">94%</span>
+          </div>
+        </article>
+
+        <article className="min-w-0 overflow-hidden rounded-lg border border-[#262520] bg-[#141412]">
+          <div role="tablist" aria-label="Incident evidence views" className="flex overflow-x-auto border-b border-[#262520]">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -180,14 +178,13 @@ export default function IncidentWorkbench({ incidentId }: { incidentId: string }
                 aria-selected={activeTab === tab.id}
                 aria-controls={`panel-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex min-h-16 shrink-0 flex-col justify-center border-b-2 px-5 text-left transition sm:px-7 ${
+                className={`min-h-11 shrink-0 border-b-2 px-4 font-mono text-[11px] transition-colors ${
                   activeTab === tab.id
-                    ? "border-cyan-300 bg-cyan-300/[0.06] text-white"
-                    : "border-transparent text-slate-400 hover:bg-white/[0.03] hover:text-slate-200"
+                    ? "border-[#F59E0B] bg-[#F59E0B]/5 text-[#F59E0B]"
+                    : "border-transparent text-[#8A8A82] hover:text-[#EDEDE8]"
                 }`}
               >
-                <span className="text-base font-bold">{tab.label}</span>
-                <span className="mt-1 font-mono text-xs tracking-wider text-slate-500">{tab.node}</span>
+                {tab.label}
               </button>
             ))}
           </div>
@@ -197,62 +194,37 @@ export default function IncidentWorkbench({ incidentId }: { incidentId: string }
             id={`panel-${activeTab}`}
             aria-labelledby={`tab-${activeTab}`}
             tabIndex={0}
-            className="min-h-80 p-5 sm:p-8"
+            className="min-h-72 p-4 sm:p-5"
           >
-            {activeTab === "commits" && (
-              <div>
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-bold text-white">Suspect commit <code className="font-mono text-cyan-200">a81c4d2</code></p>
-                    <p className="mt-1 text-base text-slate-400">maya.chen · 2 hours ago · <code className="font-mono">src/payments/charge.ts</code></p>
-                  </div>
-                  <StatusBadge tone="high">LIKELY CULPRIT</StatusBadge>
-                </div>
-                <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#060a12] p-4 font-mono text-sm leading-8 sm:text-base">
-                  <p className="text-slate-500">@@ -42,8 +42,6 @@ async function createCharge(intent: PaymentIntent) {"{"}</p>
-                  <p className="whitespace-pre text-slate-300">  const merchant = await getMerchant(intent.merchantId);</p>
-                  <p className="whitespace-pre rounded bg-rose-500/[0.08] text-rose-300">- const currency = merchant.currency ?? DEFAULT_CURRENCY;</p>
-                  <p className="whitespace-pre rounded bg-emerald-500/[0.08] text-emerald-300">+ const currency = merchant.currency;</p>
-                  <p className="whitespace-pre text-slate-300">  return provider.charge({"{"} amount: intent.amount, currency {"}"});</p>
-                </div>
-                <div className="mt-5 flex flex-wrap gap-3 text-sm text-slate-400">
-                  <span className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">+1 file changed</span>
-                  <span className="rounded-lg border border-rose-500/20 bg-rose-500/[0.05] px-3 py-2 text-rose-300">−4 removed</span>
-                  <span className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] px-3 py-2 text-emerald-300">+2 added</span>
-                </div>
+            {activeTab === "diff" && (
+              <div className="overflow-x-auto font-mono text-xs leading-7">
+                <p className="mb-3 text-[#77766F]">@@ -42,8 +42,6 @@ async function createCharge(intent: PaymentIntent)</p>
+                <p className="break-words text-[#A1A19A]">  const merchant = await getMerchant(intent.merchantId);</p>
+                <p className="break-words border-l-2 border-rose-500 bg-rose-950/40 px-2 text-rose-300">
+                  <span className="line-through">- const currency = merchant.currency ?? DEFAULT_CURRENCY;</span>
+                </p>
+                <p className="break-words border-l-2 border-emerald-500 bg-emerald-950/40 px-2 text-emerald-300">
+                  + const currency = merchant.currency;
+                </p>
+                <p className="break-words text-[#A1A19A]">  return provider.charge(&#123; amount: intent.amount, currency &#125;);</p>
               </div>
             )}
 
             {activeTab === "logs" && (
-              <div>
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-bold text-white">Correlated request timeline</p>
-                    <p className="mt-1 text-base text-slate-400">5 events within 250 ms · request <code className="font-mono text-cyan-200">req_9f2c</code></p>
-                  </div>
-                  <StatusBadge tone="muted">NODE A / LOG CORRELATION</StatusBadge>
-                </div>
-                <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#060a12] p-4 font-mono text-sm leading-8 sm:p-5 sm:text-base">
-                  {logLines.map(([timestamp, level, eventName, message]) => (
-                    <p key={timestamp} className="min-w-[900px] whitespace-pre">
-                      <span className="text-slate-500">{timestamp}</span>{" "}
-                      <span className={level === "ERROR" ? "text-rose-300" : level === "WARN" ? "text-amber-300" : "text-emerald-300"}>{level.padEnd(5)}</span>{" "}
-                      <span className="text-cyan-200">{eventName.padEnd(30)}</span>{" "}
-                      <span className={level === "ERROR" ? "text-rose-200" : "text-slate-300"}>{message}</span>
-                    </p>
-                  ))}
-                </div>
+              <div className="max-h-80 overflow-auto font-mono text-[11px] leading-6">
+                {logLines.map(([timestamp, level, eventName, message]) => (
+                  <p key={timestamp} className="grid gap-x-3 border-b border-[#262520] py-2 sm:grid-cols-[170px_52px_minmax(150px,1fr)]">
+                    <span className="text-[#77766F]">{timestamp}</span>
+                    <span className={level === "ERROR" ? "text-rose-300" : level === "WARN" ? "text-[#F59E0B]" : "text-emerald-400"}>{level}</span>
+                    <span className="min-w-0 break-words text-[#A1A19A]">{eventName} · {message}</span>
+                  </p>
+                ))}
               </div>
             )}
 
             {activeTab === "trace" && (
-              <div>
-                <div className="mb-5">
-                  <p className="text-lg font-bold text-white">Raw crash stack trace</p>
-                  <p className="mt-1 text-base text-slate-400">Captured from <code className="font-mono text-cyan-200">payment-gateway / production</code></p>
-                </div>
-                <pre className="overflow-x-auto rounded-xl border border-white/10 bg-[#060a12] p-5 font-mono text-sm leading-7 text-slate-300 sm:text-base">
-                  <code>{`TypeError: Cannot read properties of undefined (reading 'currency')
+              <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-6 text-[#D4D4CE]">
+                <code>{`TypeError: Cannot read properties of undefined (reading 'currency')
     at createCharge (src/payments/charge.ts:47:29)
     at async processPayment (src/payments/process.ts:112:18)
     at async PaymentController.create (src/api/payment.controller.ts:68:22)
@@ -262,11 +234,10 @@ Request: POST /v1/charges
 Request ID: req_9f2c
 Service: payment-gateway@2.14.0
 Environment: production`}</code>
-                </pre>
-              </div>
+              </pre>
             )}
           </div>
-        </div>
+        </article>
       </section>
     </main>
   );

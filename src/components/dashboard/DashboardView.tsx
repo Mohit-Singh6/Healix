@@ -2,18 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
   Check,
   CircleAlert,
-  Clock3,
   Copy,
   GitBranch,
   Plus,
-  Server,
   X,
 } from "lucide-react";
 import StatusBadge from "@/src/components/ui/StatusBadge";
@@ -81,46 +79,22 @@ const incidents = [
   },
 ];
 
-function MetricCard({
-  label,
-  value,
-  detail,
-  icon: Icon,
-  accent,
-}: {
+function MetricCell({ label, value, detail, highlight = false }: {
   label: string;
   value: string;
   detail: ReactNode;
-  icon: typeof Server;
-  accent: "cyan" | "rose" | "amber";
+  highlight?: boolean;
 }) {
-  const accentClasses = {
-    cyan: "border-cyan-400/20 bg-cyan-400/[0.08] text-cyan-200",
-    rose: "border-rose-400/20 bg-rose-400/[0.08] text-rose-200",
-    amber: "border-amber-400/20 bg-amber-400/[0.08] text-amber-200",
-  };
-
   return (
-    <article className="glass-card rounded-2xl p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold tracking-wide text-slate-400">{label}</p>
-          <p className="mt-3 text-4xl font-extrabold tracking-tight text-white">{value}</p>
-        </div>
-        <span className={`flex size-12 items-center justify-center rounded-xl border ${accentClasses[accent]}`}>
-          <Icon aria-hidden="true" size={22} />
-        </span>
-      </div>
-      <p className="mt-4 text-sm text-slate-500">{detail}</p>
-    </article>
+    <div className="min-w-0 px-4 py-2 first:pl-0 last:pr-0 sm:px-6">
+      <p className="font-mono text-[11px] uppercase tracking-wider text-[#8A8A82]">{label}</p>
+      <p className={`mt-2 font-mono text-2xl ${highlight ? "text-[#F59E0B]" : "text-[#EDEDE8]"}`}>{value}</p>
+      <p className="mt-1 text-xs text-[#8A8A82]">{detail}</p>
+    </div>
   );
 }
 
-function ProjectCard({
-  project,
-}: {
-  project: (typeof projects)[number];
-}) {
+function ProjectCard({ project }: { project: (typeof projects)[number] }) {
   const [copyMessage, setCopyMessage] = useState("");
 
   async function copyWebhook() {
@@ -140,54 +114,43 @@ function ProjectCard({
   }
 
   return (
-    <article className="glass-card feature-card flex min-h-72 flex-col rounded-2xl p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <span className="flex size-12 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200">
-            <Server aria-hidden="true" size={22} />
-          </span>
-          <div>
-            <h3 className="text-xl font-bold text-white">{project.name}</h3>
-            <p className="mt-1 text-sm text-slate-500">Production service</p>
-          </div>
+    <article className="flex min-h-64 flex-col rounded-lg border border-[#262520] bg-[#181816] p-5 transition-colors hover:border-[#383730]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-semibold text-[#EDEDE8]">{project.name}</h3>
+          <a
+            href={`https://github.com/${project.repo}`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex max-w-full items-center gap-2 font-mono text-xs text-[#A1A19A] transition-colors hover:text-[#EDEDE8]"
+          >
+            <GitBranch aria-hidden="true" size={14} className="shrink-0" />
+            <span className="truncate">{project.repo}</span>
+            <ArrowUpRight aria-hidden="true" size={13} className="shrink-0" />
+          </a>
         </div>
         <StatusBadge tone={project.tone}>
-          <span className="size-2 rounded-full bg-current" />
+          <span className="size-1.5 rounded-full bg-current" />
           {project.health}
         </StatusBadge>
       </div>
 
-      <a
-        href={`https://github.com/${project.repo}`}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-6 inline-flex min-w-0 items-center gap-2 text-base text-slate-300 transition hover:text-cyan-200"
-      >
-        <GitBranch aria-hidden="true" size={17} className="shrink-0 text-cyan-300" />
-        <span className="truncate">{project.repo}</span>
-        <ArrowUpRight aria-hidden="true" size={16} className="shrink-0 text-slate-500" />
-      </a>
-
-      <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/[0.07] pt-4 text-sm text-slate-400">
-        <span>Branch <span className="font-mono text-slate-200">{project.branch}</span></span>
-        <span>{project.incidents} open {project.incidents === 1 ? "incident" : "incidents"}</span>
-        <span>{project.latency} p95</span>
+      <div className="mt-5 grid grid-cols-3 gap-2 border-t border-[#2B2A24] pt-4 text-xs text-[#8A8A82]">
+        <p>Branch <span className="mt-1 block truncate font-mono text-[#D4D4CE]">{project.branch}</span></p>
+        <p>Incidents <span className="mt-1 block font-mono text-[#D4D4CE]">{project.incidents} open</span></p>
+        <p>Latency <span className="mt-1 block font-mono text-[#D4D4CE]">{project.latency}</span></p>
       </div>
 
-      <div className="mt-auto pt-5">
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
         <button
           type="button"
           onClick={copyWebhook}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/25 bg-cyan-400/[0.06] px-4 text-base font-semibold text-cyan-100 transition hover:border-cyan-300/60 hover:bg-cyan-400/[0.12] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+          className="inline-flex min-h-8 items-center gap-2 rounded border border-[#383730] bg-[#121211] px-2.5 font-mono text-[11px] text-[#A1A19A] transition-colors hover:border-[#F59E0B]/50 hover:text-[#EDEDE8]"
         >
-          {copyMessage === "Webhook URL copied." ? (
-            <Check aria-hidden="true" size={18} />
-          ) : (
-            <Copy aria-hidden="true" size={18} />
-          )}
-          {copyMessage === "Webhook URL copied." ? "Webhook Copied" : "Copy Ingestion Webhook"}
+          {copyMessage === "Webhook URL copied." ? <Check aria-hidden="true" size={13} /> : <Copy aria-hidden="true" size={13} />}
+          [ Webhook URL ]
         </button>
-        <p aria-live="polite" className="mt-2 min-h-5 text-sm text-cyan-200/80">{copyMessage}</p>
+        <p aria-live="polite" className="sr-only">{copyMessage}</p>
       </div>
     </article>
   );
@@ -206,103 +169,105 @@ export default function DashboardView() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [isAddProjectOpen]);
 
+  function submitProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+  }
+
   return (
-    <main className="mx-auto w-full max-w-[1600px] px-5 pb-24 pt-10 sm:px-8 sm:pt-14 lg:px-12">
-      <header className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+    <main className="mx-auto w-full max-w-[1600px] flex-1 bg-[#121211] px-5 pb-20 pt-9 text-[#EDEDE8] sm:px-8 lg:px-12">
+      <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="eyebrow">INCIDENT COMMAND / WORKSPACE</p>
-          <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-white sm:text-5xl">War Room</h1>
-          <p className="mt-3 text-lg text-slate-400">Your services, signals, and response queue at a glance.</p>
+          <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">Workspace / war-room</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[#EDEDE8] sm:text-4xl">War Room</h1>
+          <p className="mt-2 text-sm text-[#A1A19A]">Your services, signals, and response queue at a glance.</p>
         </div>
-        <div className="flex items-center gap-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.05] px-5 py-4">
-          <span className="relative flex size-3">
+        <div className="inline-flex items-center gap-2 self-start rounded-md border border-[#2B2A24] bg-[#1B1B18] px-3 py-2 sm:self-auto">
+          <span className="relative flex size-2">
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-40" />
-            <span className="relative inline-flex size-3 rounded-full bg-emerald-400" />
+            <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
           </span>
-          <span className="text-base font-semibold text-emerald-200">All systems operational</span>
+          <span className="font-mono text-xs text-emerald-400">engine active</span>
         </div>
       </header>
 
-      <section aria-label="Workspace summary" className="mt-9 grid gap-4 md:grid-cols-3">
-        <MetricCard label="Active Services" value="12" detail="Across 4 connected repositories" icon={Server} accent="cyan" />
-        <MetricCard label="Incidents Triaged" value="1,482" detail={<span className="inline-flex items-center gap-1"><ArrowUpRight aria-hidden="true" size={15} /> 18% from last week</span>} icon={Check} accent="cyan" />
-        <MetricCard label="Awaiting Review" value="3" detail="Human approval required" icon={Clock3} accent="amber" />
+      <section
+        aria-label="Workspace telemetry"
+        className="mt-8 grid grid-cols-1 divide-y divide-[#2B2A24] rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-4 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
+      >
+        <MetricCell label="Active Services" value="12" detail="All webhooks active" />
+        <MetricCell label="Incidents Resolved" value="1,482" detail="Avg MTTR: 4.2m" />
+        <MetricCell label="Awaiting Approval" value="3" detail="Human gate paused" highlight />
       </section>
 
-      <section className="mt-14">
-        <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <section className="mt-12">
+        <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
-            <p className="eyebrow">SERVICE HEALTH</p>
-            <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Monitored projects</h2>
+            <p className="font-mono text-[11px] uppercase tracking-wider text-[#8A8A82]">Service health</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#EDEDE8]">Monitored projects</h2>
           </div>
-          <p className="text-base text-slate-400">{projects.length} projects connected</p>
+          <p className="text-sm text-[#8A8A82]">{projects.length} projects connected</p>
         </div>
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {projects.map((project) => <ProjectCard key={project.name} project={project} />)}
           <button
             type="button"
             onClick={() => setIsAddProjectOpen(true)}
-            className="group flex min-h-72 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-cyan-500/25 bg-cyan-500/[0.025] p-6 text-center transition hover:border-cyan-300/60 hover:bg-cyan-400/[0.06] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+            className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-[#383730] bg-[#181816] p-5 text-center transition-colors hover:border-[#F59E0B]/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F59E0B]"
           >
-            <span className="flex size-14 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200 transition group-hover:shadow-[0_0_26px_rgba(6,182,212,0.2)]">
-              <Plus aria-hidden="true" size={26} />
+            <span className="flex size-10 items-center justify-center rounded-md border border-[#383730] bg-[#121211] text-[#F59E0B]">
+              <Plus aria-hidden="true" size={20} />
             </span>
-            <span className="mt-5 text-xl font-bold text-white">Add New Project</span>
-            <span className="mt-2 max-w-xs text-base leading-6 text-slate-400">Connect a repository to start monitoring alerts.</span>
+            <span className="mt-4 font-medium text-[#EDEDE8]">Add Project</span>
+            <span className="mt-1 text-xs text-[#8A8A82]">Connect a repository to monitor alerts.</span>
           </button>
         </div>
       </section>
 
-      <section className="mt-14">
-        <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <section className="mt-12">
+        <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
-            <p className="eyebrow">LIVE INCIDENT FEED</p>
-            <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Needs your attention</h2>
+            <p className="font-mono text-[11px] uppercase tracking-wider text-[#8A8A82]">Live incident feed</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#EDEDE8]">Needs your attention</h2>
           </div>
-          <span className="inline-flex items-center gap-2 text-base font-semibold text-cyan-200">
-            <CircleAlert aria-hidden="true" size={18} /> 3 active incidents
+          <span className="inline-flex items-center gap-2 font-mono text-xs text-[#F59E0B]">
+            <CircleAlert aria-hidden="true" size={15} /> 3 active incidents
           </span>
         </div>
-
-        <div className="glass-card overflow-hidden rounded-2xl">
+        <div className="overflow-hidden rounded-lg border border-[#262520] bg-[#181816]">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left">
-              <thead className="border-b border-white/10 bg-white/[0.025]">
-                <tr className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                  <th scope="col" className="px-6 py-5">Severity</th>
-                  <th scope="col" className="px-6 py-5">Error signature</th>
-                  <th scope="col" className="px-6 py-5">Service origin</th>
-                  <th scope="col" className="px-6 py-5">Volume</th>
-                  <th scope="col" className="px-6 py-5">Last seen</th>
-                  <th scope="col" className="px-6 py-5"><span className="sr-only">Actions</span></th>
+            <table className="w-full min-w-[860px] text-left">
+              <thead className="border-b border-[#262520]">
+                <tr className="font-mono text-[11px] uppercase tracking-wider text-[#8A8A82]">
+                  <th scope="col" className="px-5 py-3">Severity</th>
+                  <th scope="col" className="px-5 py-3">Error signature</th>
+                  <th scope="col" className="px-5 py-3">Service origin</th>
+                  <th scope="col" className="px-5 py-3">Volume</th>
+                  <th scope="col" className="px-5 py-3">Last seen</th>
+                  <th scope="col" className="px-5 py-3"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.06]">
+              <tbody className="divide-y divide-[#262520]">
                 {incidents.map((incident) => (
-                  <tr key={incident.id} className="transition hover:bg-cyan-400/[0.025]">
-                    <td className="px-6 py-5">
+                  <tr key={incident.id} className="transition-colors hover:bg-[#1B1B18]">
+                    <td className="px-5 py-4">
                       <StatusBadge tone={incident.tone}>
-                        {incident.severity === "CRITICAL" ? (
-                          <CircleAlert aria-hidden="true" size={14} />
-                        ) : (
-                          <ArrowDownRight aria-hidden="true" size={14} />
-                        )}
+                        {incident.severity === "CRITICAL" ? <CircleAlert aria-hidden="true" size={13} /> : <ArrowDownRight aria-hidden="true" size={13} />}
                         {incident.severity}
                       </StatusBadge>
                     </td>
-                    <td className="max-w-[360px] px-6 py-5">
-                      <p className="truncate font-mono text-sm text-slate-200" title={incident.signature}>{incident.signature}</p>
-                      <p className="mt-1 text-sm text-slate-500">{incident.id}</p>
+                    <td className="max-w-[360px] px-5 py-4">
+                      <p className="truncate font-mono text-xs text-[#D4D4CE]" title={incident.signature}>{incident.signature}</p>
+                      <p className="mt-1 font-mono text-[11px] text-[#77766F]">{incident.id}</p>
                     </td>
-                    <td className="px-6 py-5 text-base text-slate-300">{incident.service}</td>
-                    <td className="px-6 py-5 font-mono text-base text-slate-300">{incident.volume}</td>
-                    <td className="px-6 py-5 text-base text-slate-400">{incident.age}</td>
-                    <td className="px-6 py-5">
+                    <td className="px-5 py-4 text-sm text-[#A1A19A]">{incident.service}</td>
+                    <td className="px-5 py-4 font-mono text-xs text-[#A1A19A]">{incident.volume}</td>
+                    <td className="px-5 py-4 font-mono text-xs text-[#8A8A82]">{incident.age}</td>
+                    <td className="px-5 py-4">
                       <Link
                         href={`/incidents/${incident.id}`}
-                        className="inline-flex h-11 items-center gap-2 rounded-xl border border-cyan-400/35 bg-cyan-400/10 px-4 text-base font-bold text-cyan-100 shadow-[0_0_18px_rgba(6,182,212,0.08)] transition hover:border-cyan-300/70 hover:bg-cyan-400/15"
+                        className="inline-flex items-center gap-1 rounded bg-[#262520] px-3 py-1.5 font-mono text-xs text-[#EDEDE8] transition-colors hover:bg-[#F59E0B] hover:text-black"
                       >
-                        Investigate <ArrowRight aria-hidden="true" size={17} />
+                        Investigate <ArrowRight aria-hidden="true" size={13} />
                       </Link>
                     </td>
                   </tr>
@@ -315,7 +280,7 @@ export default function DashboardView() {
 
       {isAddProjectOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#02040a]/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setIsAddProjectOpen(false);
           }}
@@ -324,46 +289,43 @@ export default function DashboardView() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-project-title"
-            className="glass-card w-full max-w-xl rounded-2xl p-6 sm:p-8"
+            className="w-full max-w-md rounded-lg border border-[#2B2A24] bg-[#181816] p-6 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="eyebrow">SERVICE REGISTRATION</p>
-                <h2 id="add-project-title" className="mt-2 text-2xl font-bold text-white">Add a project</h2>
-                <p className="mt-2 text-base text-slate-400">Connect a repository to begin monitoring.</p>
+                <p className="font-mono text-[11px] tracking-wider text-[#8A8A82]">SERVICE REGISTRATION</p>
+                <h2 id="add-project-title" className="mt-2 text-xl font-semibold text-[#EDEDE8]">Add a project</h2>
+                <p className="mt-2 text-sm text-[#A1A19A]">Connect a repository to begin monitoring.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAddProjectOpen(false)}
                 aria-label="Close dialog"
-                className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition hover:border-white/25 hover:text-white"
+                className="flex size-8 shrink-0 items-center justify-center rounded border border-[#383730] text-[#A1A19A] transition-colors hover:text-[#EDEDE8]"
               >
-                <X aria-hidden="true" size={20} />
+                <X aria-hidden="true" size={16} />
               </button>
             </div>
 
-            <form className="mt-7 flex flex-col gap-5" onSubmit={(event) => event.preventDefault()}>
-              <label className="flex flex-col gap-2 text-base font-semibold text-slate-200">
+            <form className="mt-6 flex flex-col gap-4" onSubmit={submitProject}>
+              <label className="flex flex-col gap-2 text-sm text-[#D4D4CE]">
                 Project name
-                <input required name="name" placeholder="e.g. Billing API" className="h-12 rounded-xl border border-white/10 bg-[#080e1a] px-4 text-base text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/60" />
+                <input required name="name" placeholder="e.g. Billing API" className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B]" />
               </label>
-              <label className="flex flex-col gap-2 text-base font-semibold text-slate-200">
+              <label className="flex flex-col gap-2 text-sm text-[#D4D4CE]">
                 Repository URL
-                <input required name="repository" type="url" placeholder="https://github.com/org/repository" className="h-12 rounded-xl border border-white/10 bg-[#080e1a] px-4 text-base text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/60" />
+                <input required name="repository" type="url" placeholder="https://github.com/org/repository" className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B]" />
               </label>
-              <label className="flex flex-col gap-2 text-base font-semibold text-slate-200">
+              <label className="flex flex-col gap-2 text-sm text-[#D4D4CE]">
                 Branch
-                <input required name="branch" defaultValue="main" className="h-12 rounded-xl border border-white/10 bg-[#080e1a] px-4 text-base text-white outline-none focus:border-cyan-400/60" />
+                <input required name="branch" defaultValue="main" className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none focus:border-[#F59E0B]" />
               </label>
               <button
                 type="submit"
-                disabled
-                title="Project creation is not connected in this preview."
-                className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-cyan-500/20 px-5 text-base font-bold text-cyan-100 opacity-60"
+                className="mt-1 inline-flex min-h-10 items-center justify-center gap-2 rounded bg-[#F59E0B] px-4 font-mono text-sm font-medium text-black transition-colors hover:bg-[#D97706]"
               >
-                Create project <Plus aria-hidden="true" size={18} />
+                Connect Repository <Plus aria-hidden="true" size={16} />
               </button>
-              <p className="text-center text-sm text-slate-500">Project registration will be available in a future phase.</p>
             </form>
           </section>
         </div>
