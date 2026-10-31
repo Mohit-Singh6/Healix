@@ -340,8 +340,7 @@ export async function executeRemediationNode(
       }
     }
   }
-
-  // 2. Format Commits and Logs to avoid "[object Object]"
+// 2. Format Commits and Logs to avoid "[object Object]"
   const formattedCommits = state.candidateCommits.length > 0
     ? state.candidateCommits.map((c) => `SHA: ${c.sha}\nAuthor: ${c.author}\nDiff:\n${c.diff}`).join("\n---\n")
     : "No recent candidate commits.";
@@ -350,38 +349,59 @@ export async function executeRemediationNode(
     ? state.correlatedLogs.join("\n")
     : "No correlated logs.";
 
+  let mitigationOutcomeSummary = "Manual intervention required or no action taken.";
+
+  if (state.proposedAction === "BUGFIX_PR" || state.proposedAction === "REVERT_PR") {
+    mitigationOutcomeSummary = prUrl
+      ? `Remediation Pull Request successfully created at: ${prUrl}`
+      : "Failed to generate remediation Pull Request on GitHub.";
+  } else if (state.proposedAction === "APPLY_CONFIG_PATCH") {
+    const status = state.actionPayload?.patchStatus;
+    if (status === "APPLIED") {
+      mitigationOutcomeSummary = `Automated configuration patch applied to ${state.actionPayload?.targetProvider}: set ${state.actionPayload?.appliedKey}=${state.actionPayload?.appliedValue}.`;
+    } else if (status === "FORWARDED_CUSTOM_WEBHOOK") {
+      mitigationOutcomeSummary = `Configuration patch forwarded to custom webhook: ${state.actionPayload?.webhookUrl}.`;
+    } else if (status === "SKIPPED_NO_PROVIDER") {
+      mitigationOutcomeSummary = `Automated patch skipped: No cloud credentials or webhook configured for deploymentProvider (${state.actionPayload?.targetProvider || "NONE"}). Required manual update: ${state.actionPayload?.recommendedKey}=${state.actionPayload?.recommendedValue}.`;
+    } else {
+      mitigationOutcomeSummary = `Configuration patch attempt failed: ${state.actionPayload?.patchFailureReason || "Unknown error"}.`;
+    }
+  }
+
   const systemPrompt = `
-You are an expert site reliability engineer drafting an official post-mortem incident report.
+    You are an expert site reliability engineer drafting an official post-mortem incident report.
 
-INCIDENT CONTEXT:
-Service: ${state.serviceName}
-Error Title: ${state.errorMessage}
-Stack Trace:
-${state.stackTrace}
+    INCIDENT CONTEXT:
+    Service: ${state.serviceName}
+    Error Title: ${state.errorMessage}
+    Stack Trace:
+    ${state.stackTrace}
 
-CORRELATED LOGS:
-${formattedLogs}
+    CORRELATED LOGS:
+    ${formattedLogs}
 
-SUSPECT COMMITS:
-${formattedCommits}
+    SUSPECT COMMITS:
+    ${formattedCommits}
 
-DIAGNOSTIC HYPOTHESIS:
-${state.hypothesis}
+    DIAGNOSTIC HYPOTHESIS:
+    ${state.hypothesis}
 
-OPERATOR REVIEW DECISION:
-Status: ${state.humanApprovalStatus}
-Feedback: ${state.humanDecision?.feedback || "None"}
-Remediation PR: ${prUrl || "No automated PR opened"}
+    - Mitigation Outcome: ${mitigationOutcomeSummary}
 
-TASK:
-Generate a thorough, production-grade Post-Mortem report.
-Return JSON matching the schema with:
-- title: A concise incident title.
-- summary: Executive summary highlighting blast radius and service impact.
-- rootCause: Technical failure mechanism.
-- mitigationSteps: Concrete mitigation steps taken.
-- markdownContent: The complete formatted markdown report with clear headings (Executive Summary, Timeline, Root Cause, Mitigation, Preventative Recommendations).
-`;
+    OPERATOR REVIEW DECISION:
+    Status: ${state.humanApprovalStatus}
+    Feedback: ${state.humanDecision?.feedback || "None"}
+    Remediation PR: ${prUrl || "No automated PR opened"}
+
+    TASK:
+    Generate a thorough, production-grade Post-Mortem report.
+    Return JSON matching the schema with:
+    - title: A concise incident title.
+    - summary: Executive summary highlighting blast radius and service impact.
+    - rootCause: Technical failure mechanism.
+    - mitigationSteps: Concrete mitigation steps taken.
+    - markdownContent: The complete formatted markdown report with clear headings (Executive Summary, Timeline, Root Cause, Mitigation, Preventative Recommendations).
+  `;
 
   // 3. Generate Post-Mortem with Gemini
   const response = await ai.models.generateContent({
@@ -414,28 +434,34 @@ Return JSON matching the schema with:
   // 4. Finalize state in Neon DB
   const finalStatus = state.humanApprovalStatus === "APPROVED" ? "RESOLVED" : "DISMISSED";
 
+  // Update Incident
   await prisma.incident.update({
     where: { id: state.incidentId },
     data: {
       status: finalStatus,
-      revertPrUrl: prUrl,
+      remediationPrUrl: prUrl,
+      revertPrUrl: prUrl, // Keep populated for backward compatibility
+      actionPayload: state.actionPayload as any,
     },
   });
 
+  // Upsert PostMortem using parsed fields directly
   await prisma.postMortem.upsert({
     where: { incidentId: state.incidentId },
     update: {
-      summary: parsed.summary,
-      rootCause: parsed.rootCause,
-      mitigationSteps: parsed.mitigationSteps,
-      fullMarkdown: parsed.markdownContent,
+      title: parsed.title || "Incident Post-Mortem Report",
+      fullMarkdown: parsed.markdownContent || "",
+      summary: parsed.summary || state.hypothesis.slice(0, 500),
+      rootCause: parsed.rootCause || state.hypothesis,
+      mitigationSteps: parsed.mitigationSteps || mitigationOutcomeSummary,
     },
     create: {
       incidentId: state.incidentId,
-      summary: parsed.summary,
-      rootCause: parsed.rootCause,
-      mitigationSteps: parsed.mitigationSteps,
-      fullMarkdown: parsed.markdownContent,
+      title: parsed.title || "Incident Post-Mortem Report",
+      fullMarkdown: parsed.markdownContent || "",
+      summary: parsed.summary || state.hypothesis.slice(0, 500),
+      rootCause: parsed.rootCause || state.hypothesis,
+      mitigationSteps: parsed.mitigationSteps || mitigationOutcomeSummary,
     },
   });
 
