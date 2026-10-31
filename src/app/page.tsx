@@ -153,10 +153,10 @@ export default function Home() {
               </p>
               {/* Static API handoff preview; wire this panel to live pull request events when available. */}
               <div className="mt-6 rounded-md border border-[#232320] bg-[#121211] p-4 font-mono text-xs leading-6 transition-colors hover:border-[#383730]">
-                <p className="text-[#A1A19A]">&gt; Analyzing stack trace... <span className="text-[#10B981]">[DONE]</span></p>
-                <p className="text-[#A1A19A]">&gt; Formulating patch hypothesis... <span className="text-[#10B981]">[DONE]</span></p>
+                <p className="text-[#A1A19A]">&gt; Analyzing stack trace... <span className="text-[#10B981]">DONE</span></p>
+                <p className="text-[#A1A19A]">&gt; Formulating patch hypothesis... <span className="text-[#10B981]">DONE</span></p>
                 <p className="mt-2 break-all text-[#A1A19A]">&gt; POST https://api.github.com/repos/org/repo/pulls</p>
-                <p className="mt-2 text-[#10B981]">[✓] Pull Request #142 Drafted Successfully</p>
+                <p className="mt-2 text-[#10B981]">✓ Pull Request #142 Drafted Successfully</p>
                 <p className="mt-2 text-[#F59E0B]">⏸ EXECUTION PAUSED: Awaiting Operator Approval</p>
                 <p className="text-[#A1A19A] opacity-0 transition-opacity duration-500 group-hover:opacity-100">
                   &gt; Human Approval Gate: required

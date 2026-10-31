@@ -21,7 +21,7 @@ export default function StatusBadge({
 }: StatusBadgeProps) {
   return (
     <span
-      className={`inline-flex min-h-7 items-center gap-2 rounded-md border px-2.5 py-1 font-mono text-[11px] tracking-wide ${toneClasses[tone]} ${className}`}
+      className={`inline-flex min-h-7 items-center gap-2 rounded-md border px-2.5 py-1 font-mono text-xs font-semibold tracking-wide ${toneClasses[tone]} ${className}`}
     >
       {children}
     </span>
