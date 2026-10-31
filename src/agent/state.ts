@@ -3,6 +3,7 @@ import { z } from "zod";
 
 // 1. Zod Domain Schemas & Inferred Types
 
+
 export const CandidateCommitSchema = z.object({
   sha: z.string(),
   diff: z.string(),
@@ -15,11 +16,39 @@ export type CandidateCommit = z.infer<typeof CandidateCommitSchema>;
 
 export const ProposedActionSchema = z.enum([
   "REVERT_PR",
+  "BUGFIX_PR",
   "APPLY_CONFIG_PATCH",
   "MANUAL_INTERVENTION",
   "NO_ACTION",
 ]);
 export type ProposedAction = z.infer<typeof ProposedActionSchema>;
+
+export const BugfixPatchSchema = z.object({
+  targetFilePath: z.string(),
+  patchMode: z.enum(["FULL_FILE", "SEARCH_REPLACE"]),
+  patchedFileContent: z.string().optional(),
+  searchBlock: z.string().optional(),
+  replaceBlock: z.string().optional(),
+});
+
+export const ReplacementItemSchema = z.object({
+  searchBlock: z.string(),
+  replaceBlock: z.string(),
+});
+
+export type ReplacementItem = z.infer<typeof ReplacementItemSchema>;
+
+export const ActionPayloadSchema = z.object({
+  targetCommitSha: z.string().optional(),
+  configKey: z.string().optional(),
+  configValue: z.string().optional(),
+  targetFilePath: z.string().optional(),
+  patchMode: z.enum(["FULL_FILE", "SEARCH_REPLACE"]).optional(),
+  patchedFileContent: z.string().optional(),
+  replacements: z.array(ReplacementItemSchema).optional(),
+});
+
+export type ActionPayload = z.infer<typeof ActionPayloadSchema>;
 
 export const HumanApprovalStatusSchema = z.enum([
   "PENDING",
@@ -70,7 +99,7 @@ export const IncidentState = new StateSchema({
   // --- Node C: Root Cause Diagnostic & Proposed Fix (Gemini) ---
   hypothesis: z.string().default(""),
   proposedAction: ProposedActionSchema.default("NO_ACTION"),
-  actionPayload: z.record(z.string(), z.unknown()).default({}),
+  actionPayload: ActionPayloadSchema.default({}),
 
   // --- Node D: Human-in-the-Loop (HITL) Gate ---
   // Pauses with interrupt(). Populated when operator clicks Approve or Reject.

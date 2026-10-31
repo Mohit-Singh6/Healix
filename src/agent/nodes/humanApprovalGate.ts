@@ -10,6 +10,7 @@ export async function humanApprovalGate(
   // Only pause for actions requiring automated mutations (Revert PR / Config Patch)
   const requiresApproval =
     state.proposedAction === "APPLY_CONFIG_PATCH" ||
+    state.proposedAction === "BUGFIX_PR" ||
     state.proposedAction === "REVERT_PR";
 
   if (!requiresApproval) {
