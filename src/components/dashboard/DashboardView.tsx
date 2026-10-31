@@ -97,7 +97,7 @@ async function copyText(value: string) {
 type DeploymentProvider = "NONE" | "VERCEL" | "RENDER" | "CUSTOM";
 
 const fieldClassName =
-  "w-full rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B]";
+  "w-full rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#2B2A24] focus:ring-0 focus-visible:outline-none";
 
 function FormField({
   label,
@@ -145,11 +145,15 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
   useEffect(() => {
     if (!isAddProjectOpen) return;
 
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsAddProjectOpen(false);
-    }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+    };
   }, [isAddProjectOpen]);
 
   async function submitProject(event: FormEvent<HTMLFormElement>) {
@@ -189,6 +193,8 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
   }
 
   function closeProjectDialog() {
+    if (!window.confirm("Close this project setup? Any unsaved changes will be lost.")) return;
+
     setIsAddProjectOpen(false);
     setFormError("");
     setCreatedProject(null);
@@ -384,16 +390,13 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
 
       {isAddProjectOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !isSubmitting) closeProjectDialog();
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-contain bg-black/80 p-4 backdrop-blur-sm"
         >
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-project-title"
-            className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-lg border border-[#2B2A24] bg-[#181816] p-6 shadow-2xl"
+            className="hide-scrollbar max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-lg border border-[#2B2A24] bg-[#181816] p-6 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -451,45 +454,38 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
               </div>
             ) : (
               <form className="mt-6 flex flex-col gap-5" onSubmit={submitProject}>
-                <fieldset className="flex flex-col gap-4">
-                  <legend className="mb-3 font-mono text-xs uppercase tracking-wider text-[#F59E0B]">Required core fields</legend>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField label="Project name" name="name" placeholder="e.g. Storefront API" required />
-                    <FormField label="Repository owner" name="repoOwner" placeholder="e.g. acme-corp" required />
-                    <FormField label="Repository name" name="repoName" placeholder="e.g. backend-api" required />
-                    <FormField
-                      label="GitHub personal access token"
-                      name="githubToken"
-                      type="password"
-                      placeholder="Fine-grained GitHub token"
-                      required
-                      helper="Requires Contents: Read & Write and Pull Requests: Read & Write."
-                    />
-                  </div>
-                </fieldset>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField label="Project name" name="name" placeholder="e.g. Storefront API" required />
+                  <FormField label="Repository owner" name="repoOwner" placeholder="e.g. acme-corp" required />
+                  <FormField label="Repository name" name="repoName" placeholder="e.g. backend-api" required />
+                  <FormField
+                    label="GitHub personal access token"
+                    name="githubToken"
+                    type="password"
+                    placeholder="Fine-grained GitHub token"
+                    required
+                    helper="Requires Contents: Read & Write and Pull Requests: Read & Write."
+                  />
+                </div>
 
-                <fieldset className="flex flex-col gap-4 border-t border-[#2B2A24] pt-4">
-                  <legend className="mb-3 font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Optional baseline fields</legend>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField label="Default branch" name="defaultBranch" defaultValue="main" />
-                    <FormField label="Deployed URL" name="deployedUrl" type="url" placeholder="https://api.yourdomain.com" />
-                  </div>
-                </fieldset>
+                <div className="grid gap-4 border-t border-[#2B2A24] pt-4 sm:grid-cols-2">
+                  <FormField label="Default branch (optional)" name="defaultBranch" defaultValue="main" />
+                  <FormField label="Deployed URL (optional)" name="deployedUrl" type="url" placeholder="https://api.yourdomain.com" />
+                </div>
 
-                <fieldset className="flex flex-col gap-4 border-t border-[#2B2A24] pt-4">
-                  <legend className="mb-3 font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Deployment provider</legend>
+                <div className="flex flex-col gap-4 border-t border-[#2B2A24] pt-4">
                   <label className="flex flex-col gap-1.5 text-sm text-[#D4D4CE]">
-                    Runtime configuration provider
+                    Runtime configuration provider (optional)
                     <select
                       name="deploymentProvider"
                       value={deploymentProvider}
                       onChange={(event) => setDeploymentProvider(event.target.value as DeploymentProvider)}
                       className={fieldClassName}
                     >
-                      <option value="NONE">NONE — GitHub fixes only (No runtime env patching)</option>
-                      <option value="VERCEL">VERCEL — Vercel</option>
-                      <option value="RENDER">RENDER — Render</option>
-                      <option value="CUSTOM">CUSTOM — Custom Webhook</option>
+                      <option value="NONE">None</option>
+                      <option value="VERCEL">Vercel</option>
+                      <option value="RENDER">Render</option>
+                      <option value="CUSTOM">Custom webhook</option>
                     </select>
                   </label>
 
@@ -515,16 +511,21 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
                   )}
 
                   {deploymentProvider === "CUSTOM" && (
-                    <FormField
-                      label="Custom webhook URL"
-                      name="customWebhookUrl"
-                      type="url"
-                      placeholder="https://infra.yourcompany.com/api/healix-patch"
-                      required
-                      helper="Healix sends configKey and configValue in an HMAC-SHA256 signed request using X-Healix-Signature."
-                    />
+                    <>
+                      <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+                        Healix will send signed requests to this endpoint when approved runtime configuration patches are needed.
+                      </p>
+                      <FormField
+                        label="Custom webhook URL"
+                        name="customWebhookUrl"
+                        type="url"
+                        placeholder="https://infra.yourcompany.com/api/healix-patch"
+                        required
+                        helper="Requests include configKey and configValue and use an HMAC-SHA256 signature."
+                      />
+                    </>
                   )}
-                </fieldset>
+                </div>
 
                 {formError && (
                   <p role="alert" className="rounded border border-rose-800/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">

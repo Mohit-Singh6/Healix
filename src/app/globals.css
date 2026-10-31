@@ -11,6 +11,9 @@ a { text-decoration: none; }
 :focus-visible { outline: 2px solid #F59E0B; outline-offset: 3px; }
 ::selection { color: #121211; background: #F59E0B; }
 
+.hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+
 @keyframes terminal-appear {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
