@@ -1,89 +1,132 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Image from "next/image";
-import { ArrowRight, LogOut, UserRound } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { ArrowRight, LogOut } from "lucide-react";
 import { useDevMode } from "@/src/components/providers/DevModeProvider";
 
-export default function Navbar() {
-  const { isLoggedIn, setIsLoggedIn, toggleLoggedIn } = useDevMode();
+function Brand() {
+  return (
+    <Link href="/" aria-label="Healix home" className="shrink-0">
+      <div className="flex items-center gap-2">
+        <Image src="/Healix_Logo-clean.png" alt="" width={32} height={32} priority unoptimized className="size-8 object-contain" />
+        <Image src="/Healix_Text_Logo.png" alt="Healix" width={57} height={32} priority unoptimized style={{ width: "auto" }} className="hidden h-8 w-auto object-contain sm:block" />
+      </div>
+    </Link>
+  );
+}
+
+function OperatorMenu() {
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const { setIsLoggedIn } = useDevMode();
   const router = useRouter();
 
   function logOut() {
     setIsLoggedIn(false);
+    setIsUserMenuOpen(false);
     router.push("/");
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-cyan-400/10 bg-[#050811]/90 backdrop-blur-xl">
-      <nav
-        aria-label="Main navigation"
-        className="mx-auto flex min-h-20 max-w-[1600px] flex-wrap items-center justify-between gap-4 px-5 py-3 sm:px-8 lg:px-12"
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        aria-label="MS, open operator menu"
+        aria-expanded={isUserMenuOpen}
+        onClick={() => setIsUserMenuOpen((open) => !open)}
+        className="flex size-8 cursor-pointer items-center justify-center rounded-full border border-[#33322C] bg-[#1E1E1B] font-mono text-xs font-medium leading-none text-[#EDEDE8] transition-colors hover:border-[#F59E0B]"
       >
-        <Link href="/" className="group flex items-center gap-1" aria-label="Healix home">
-          <Image
-            src="/Healix_Logo-clean.png"
-            alt=""
-            width={48}
-            height={48}
-            priority
-            className="size-11 object-contain"
-          />
-          <Image
-            src="/Healix_Text_Logo.png"
-            alt="Healix"
-            width={130}
-            height={73}
-            priority
-            className="-ml-4 h-[4.2rem] w-[125px] object-contain sm:w-[145px]"
-          />
-        </Link>
-
-        <div className="flex flex-wrap items-center justify-end gap-3 sm:gap-4">
+        MS
+      </button>
+      {isUserMenuOpen && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-lg border border-[#2B2A24] bg-[#181816] p-2 shadow-2xl">
+          <div className="px-3 py-2">
+            <p className="text-sm font-medium text-[#EDEDE8]">Mohit Singh</p>
+            <p className="mt-1 font-mono text-[11px] text-[#8A8A82]">operator@healix.internal</p>
+            <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-[#F59E0B]">Operator</p>
+          </div>
+          <div className="my-1 border-t border-[#2B2A24]" />
           <button
             type="button"
-            onClick={toggleLoggedIn}
-            aria-pressed={isLoggedIn}
-            className="inline-flex h-11 items-center gap-2 rounded-full border border-cyan-400/20 bg-[#0c1427]/90 px-4 text-sm font-semibold text-slate-300 transition hover:border-cyan-300/50 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:px-5"
+            onClick={logOut}
+            className="flex w-full items-center justify-between rounded px-3 py-2 text-left font-mono text-xs text-[#EDEDE8] transition-colors hover:bg-rose-950/10 hover:text-rose-200"
           >
-            <span className="text-slate-500">Mode:</span>
-            <span className={isLoggedIn ? "text-cyan-200" : "text-slate-200"}>
-              {isLoggedIn ? "Logged In" : "Logged Out"}
-            </span>
-            <span aria-hidden="true" className="text-cyan-400">⇄</span>
+            Log Out <LogOut aria-hidden="true" size={14} />
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
-          {isLoggedIn ? (
-            <>
+function InternalLinks({ pathname }: { pathname: string }) {
+  const links = [
+    { label: "War Room", href: "/dashboard", active: pathname === "/dashboard" },
+    { label: "Incidents", href: "/dashboard#incidents", active: pathname.startsWith("/incidents/") },
+    { label: "Services", href: "/dashboard#projects", active: false },
+    { label: "Docs", href: "/#architecture", active: false },
+  ];
+
+  return (
+    <nav aria-label="Workspace navigation" className="flex min-w-0 items-center gap-1 overflow-x-auto max-sm:order-2 max-sm:w-full max-sm:max-w-full max-sm:flex-none sm:flex-1">
+      {links.map((link) => (
+        <Link
+          key={link.label}
+          href={link.href}
+          className={`shrink-0 rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+            link.active ? "text-[#EDEDE8]" : "text-[#A1A19A] hover:text-[#EDEDE8]"
+          }`}
+        >
+          {link.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+export default function Navbar() {
+  const pathname = usePathname();
+  const { isLoggedIn } = useDevMode();
+  const isInternalRoute = pathname === "/dashboard" || pathname.startsWith("/incidents/");
+  const showInternalNav = isInternalRoute || isLoggedIn;
+
+  return (
+    <header className="sticky top-0 z-50 w-full border-b border-[#232320] bg-[#121211]/90 backdrop-blur-md">
+      <div className="mx-auto flex min-h-14 max-w-7xl flex-wrap items-center justify-between gap-y-1 px-6 py-2 sm:h-14 sm:flex-nowrap sm:py-0">
+        <Brand />
+
+        {showInternalNav ? (
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 max-sm:ml-0 max-sm:flex-wrap max-sm:justify-between sm:ml-8 sm:gap-6">
+            <InternalLinks pathname={pathname} />
+            <div className="order-1 flex shrink-0 items-center gap-2 sm:order-none sm:gap-3">
               <Link
-                href="/dashboard"
-                className="inline-flex h-12 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-base font-semibold text-slate-200 transition hover:border-cyan-300/40 hover:text-white"
+                href="/dashboard#projects"
+                className="inline-flex items-center gap-1.5 rounded-md border border-[#33322C] bg-[#1E1E1B] px-3.5 py-1.5 font-mono text-xs text-[#EDEDE8] transition-all hover:border-[#F59E0B]/50 hover:bg-[#282723]"
               >
-                <UserRound aria-hidden="true" size={18} />
-                <span className="hidden sm:inline">Mock Operator</span>
-                <span className="sm:hidden">Profile</span>
+                <span aria-hidden="true">+</span> Add Project
               </Link>
-              <button
-                type="button"
-                onClick={logOut}
-                className="inline-flex h-12 items-center gap-2 rounded-xl px-3 text-base font-semibold text-slate-400 transition hover:text-rose-300"
-              >
-                <LogOut aria-hidden="true" size={18} />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
-            </>
-          ) : (
+              <OperatorMenu />
+            </div>
+          </div>
+        ) : pathname === "/auth" ? null : (
+          <div className="ml-auto flex items-center gap-5">
+            <Link href="/#architecture" className="font-mono text-xs text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
+              Docs
+            </Link>
+            <Link href="/#contact" className="font-mono text-xs text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
+              Contact Us
+            </Link>
             <Link
               href="/auth"
-              className="button-primary inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-bold text-slate-950"
+              className="inline-flex items-center gap-2 rounded-md bg-[#F59E0B] px-4 py-1.5 font-mono text-xs font-medium text-black transition-colors hover:bg-[#D97706]"
             >
-              Get Started
-              <ArrowRight aria-hidden="true" size={18} />
+              Get Started <ArrowRight aria-hidden="true" size={13} />
             </Link>
-          )}
-        </div>
-      </nav>
+          </div>
+        )}
+      </div>
     </header>
   );
 }

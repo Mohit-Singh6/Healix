@@ -14,59 +14,57 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 items-center justify-center px-5 py-14 sm:px-8 lg:px-12">
-      <section className="glass-card w-full max-w-2xl rounded-3xl p-7 sm:p-10 md:p-12">
-        <div className="mx-auto flex size-16 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-200 shadow-[0_0_30px_rgba(6,182,212,0.12)]">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 items-center justify-center bg-[#121211] px-5 py-14 sm:px-8 lg:px-12">
+      <section className="w-full max-w-md rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-8">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-md border border-[#383730] bg-[#121211] text-[#F59E0B]">
           <LockKeyhole aria-hidden="true" size={28} />
         </div>
-        <p className="eyebrow mt-7 text-center">SECURE WORKSPACE ACCESS</p>
-        <h1 className="mt-3 text-center text-4xl font-extrabold tracking-tight text-white sm:text-5xl">Welcome to Healix</h1>
-        <p className="mx-auto mt-4 max-w-lg text-center text-lg leading-8 text-slate-400">
+        <p className="mt-7 text-center font-mono text-xs tracking-wider text-[#A1A19A]">HEALIX // ACCESS CONTROL</p>
+        <h1 className="mt-3 text-center text-3xl font-semibold tracking-tight text-[#EDEDE8]">Sign in to Healix</h1>
+        <p className="mx-auto mt-4 max-w-lg text-center text-sm leading-6 text-[#A1A19A]">
           Sign in to connect your services and bring calm to your incident response.
         </p>
 
-        <div className="mt-9 flex flex-col gap-4">
+        <div className="mt-8 flex flex-col gap-3">
           <button
             type="button"
             disabled
-            title="GitHub sign-in is planned for Phase 4."
-            className="inline-flex h-14 items-center justify-center gap-3 rounded-xl border border-white/15 bg-white/[0.06] px-6 text-lg font-bold text-slate-200 opacity-70"
+            title="GitHub sign-in is not connected in this preview."
+            className="inline-flex h-12 items-center justify-center gap-3 rounded-md border border-[#383730] bg-[#242420] px-5 text-sm font-medium text-[#EDEDE8] transition-colors hover:bg-[#2F2E29] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <GitBranch aria-hidden="true" size={21} />
+            <GitBranch aria-hidden="true" size={18} />
             Continue with GitHub
-            <span className="ml-auto text-sm font-semibold text-slate-500">PHASE 4</span>
           </button>
           <button
             type="button"
             disabled
-            title="Google sign-in is planned for Phase 4."
-            className="inline-flex h-14 items-center justify-center gap-3 rounded-xl border border-white/10 bg-[#080e1a] px-6 text-lg font-semibold text-slate-300 opacity-70"
+            title="Google sign-in is not connected in this preview."
+            className="inline-flex h-12 items-center justify-center gap-3 rounded-md border border-[#383730] bg-[#242420] px-5 text-sm font-medium text-[#EDEDE8] transition-colors hover:bg-[#2F2E29] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <span aria-hidden="true" className="flex size-6 items-center justify-center rounded-full bg-white text-sm font-black text-blue-600">G</span>
+            <span aria-hidden="true" className="flex size-5 items-center justify-center rounded-full bg-[#EDEDE8] text-xs font-bold text-[#242420]">G</span>
             Continue with Google
-            <span className="ml-auto text-sm font-semibold text-slate-500">PHASE 4</span>
           </button>
         </div>
 
-        <div className="my-8 flex items-center gap-4 text-sm font-semibold tracking-wider text-slate-500">
-          <span className="h-px flex-1 bg-white/10" />
+        <div className="my-7 flex items-center gap-4 font-mono text-[10px] tracking-wider text-[#77766F]">
+          <span className="h-px flex-1 bg-[#2B2A24]" />
           DEVELOPER PREVIEW
-          <span className="h-px flex-1 bg-white/10" />
+          <span className="h-px flex-1 bg-[#2B2A24]" />
         </div>
 
         <button
           type="button"
           onClick={enterPreview}
-          className="group flex min-h-16 w-full items-center justify-between gap-4 rounded-xl border border-cyan-400/25 bg-cyan-400/[0.07] px-5 py-4 text-left text-base font-semibold text-cyan-100 transition hover:border-cyan-300/60 hover:bg-cyan-400/[0.12] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:px-6"
+          className="group flex min-h-14 w-full items-center justify-between gap-4 rounded-md border border-[#F59E0B]/30 bg-[#121211] px-4 py-3 text-left font-mono text-xs text-[#F59E0B] transition-colors hover:border-[#F59E0B]/60 hover:bg-[#F59E0B]/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F59E0B]"
         >
           <span className="flex items-center gap-3">
-            <ShieldCheck aria-hidden="true" size={21} className="shrink-0 text-cyan-300" />
-            <span>Click here to enter dashboard as Mock Operator</span>
+            <ShieldCheck aria-hidden="true" size={18} className="shrink-0" />
+            <span>› Enter developer preview as Operator →</span>
           </span>
-          <ArrowRight aria-hidden="true" size={20} className="shrink-0 transition group-hover:translate-x-1" />
+          <ArrowRight aria-hidden="true" size={17} className="shrink-0 transition group-hover:translate-x-1" />
         </button>
-        <p className="mt-4 text-center text-sm leading-6 text-slate-500">
-          Provider sign-in is a Phase 4 stub. Preview access is local to this session.
+        <p className="mt-4 text-center text-xs leading-5 text-[#77766F]">
+          Provider sign-in is not connected in this preview. Preview access is local to this session.
         </p>
       </section>
     </main>

@@ -7,11 +7,11 @@ type StatusBadgeProps = {
 };
 
 const toneClasses = {
-  critical: "border-rose-500/40 bg-rose-950/50 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.16)]",
-  high: "border-amber-500/40 bg-amber-950/50 text-amber-300",
-  ready: "border-cyan-400/40 bg-cyan-950/50 text-cyan-200",
-  healthy: "border-emerald-500/40 bg-emerald-950/50 text-emerald-300",
-  muted: "border-slate-500/30 bg-slate-800/60 text-slate-300",
+  critical: "border-rose-800/40 bg-rose-950/40 text-rose-300",
+  high: "border-[#D97706]/40 bg-[#F59E0B]/10 text-[#F59E0B]",
+  ready: "border-emerald-800/40 bg-emerald-950/40 text-emerald-400",
+  healthy: "border-emerald-800/40 bg-emerald-950/40 text-emerald-400",
+  muted: "border-[#383730] bg-[#1B1B18] text-[#A1A19A]",
 };
 
 export default function StatusBadge({
@@ -21,7 +21,7 @@ export default function StatusBadge({
 }: StatusBadgeProps) {
   return (
     <span
-      className={`inline-flex min-h-8 items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold tracking-[0.12em] ${toneClasses[tone]} ${className}`}
+      className={`inline-flex min-h-7 items-center gap-2 rounded-md border px-2.5 py-1 font-mono text-xs font-semibold tracking-wide ${toneClasses[tone]} ${className}`}
     >
       {children}
     </span>
