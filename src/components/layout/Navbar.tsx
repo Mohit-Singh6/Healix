@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 
 export default function Navbar() {
@@ -8,9 +9,23 @@ export default function Navbar() {
         aria-label="Main navigation"
         className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-3 sm:px-8 lg:px-12"
       >
-        <Link href="/" className="inline-flex items-center gap-2 font-semibold tracking-tight text-[#E2E2DC]" aria-label="Healix home">
-          <span aria-hidden="true" className="size-2 rounded-full bg-[#F59E0B]" />
-          <span className="text-lg">Healix</span>
+        <Link href="/" className="inline-flex items-center gap-2" aria-label="Healix home">
+          <Image
+            src="/Healix_Logo-clean.png"
+            alt=""
+            width={28}
+            height={28}
+            priority
+            className="size-7 object-contain"
+          />
+          <Image
+            src="/Healix_Text_Logo.png"
+            alt="Healix"
+            width={64}
+            height={33}
+            priority
+            className="h-7 w-auto object-contain"
+          />
         </Link>
 
         <div className="ml-auto flex items-center gap-5 sm:gap-8">

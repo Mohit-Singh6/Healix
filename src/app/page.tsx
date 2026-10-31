@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, ChevronRight, GitBranch, ShieldCheck } from "lucide-react";
 
 const integrations = ["PagerDuty", "Sentry", "Datadog", "GitHub", "Slack"];
@@ -8,21 +9,29 @@ const pipeline = [
     number: "01",
     title: "Telemetry Ingestion",
     detail: "Webhook capture, error logs, and stack-trace parsing",
+    trace: "POST /api/v1/webhooks/pagerduty (200 OK)",
+    traceClassName: "text-[#A1A19A]",
   },
   {
     number: "02",
     title: "AST & Blame Correlation",
     detail: "Vector search over repo graph and commit history",
+    trace: "git blame -L 41,45 (commit 4fa01b)",
+    traceClassName: "text-[#A1A19A]",
   },
   {
     number: "03",
     title: "Sandboxed Diagnostic & Patch",
     detail: "LLM-driven fix verification with automated test suites",
+    trace: "✓ 14 unit tests passed in isolated vm",
+    traceClassName: "text-[#10B981]",
   },
   {
     number: "04",
     title: "Ready-to-Merge Pull Request",
     detail: "Complete branch with forensic context and one-click deployment",
+    trace: "branch: healix/fix-cache-refresh-leak",
+    traceClassName: "text-[#A1A19A]",
   },
 ];
 
@@ -59,14 +68,16 @@ const footerGroups = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex-1 bg-[#121211] text-[#E2E2DC]">
+    <main className="min-h-screen flex-1 bg-[#121211] text-[#EDEDE8]">
       <div className="mx-auto w-full max-w-[1440px] px-5 sm:px-8 lg:px-12">
         <section className="grid gap-12 border-b border-[#2B2A24] py-16 sm:py-20 lg:grid-cols-[1fr_0.92fr] lg:items-center lg:gap-16 lg:py-24">
           <div>
-            <p className="mb-6 flex items-center gap-3 font-mono text-xs font-medium uppercase tracking-[0.16em] text-[#A1A19A]">
-              <span aria-hidden="true" className="size-2 rounded-full bg-[#F59E0B]" />
-              Incident response, engineered
-            </p>
+            <Link
+              href="#architecture"
+              className="mb-6 inline-flex cursor-pointer items-center rounded-full border border-[#2B2A24] bg-[#1B1B18] px-3 py-1 font-mono text-xs text-[#E2E2DC] transition-colors hover:border-[#F59E0B]/50"
+            >
+              v1.4 • Autonomous PR Synthesis for GitHub &amp; GitLab →
+            </Link>
             <h1 className="max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight text-[#E2E2DC] sm:text-5xl lg:text-6xl">
               Self-Healing Code. Zero 3 AM Alert Fatigue.
             </h1>
@@ -91,15 +102,17 @@ export default function Home() {
               <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#77766F]">
                 Connects to your incident stack
               </p>
-              <ul className="mt-4 flex flex-wrap gap-x-7 gap-y-3 text-sm font-medium text-[#A1A19A]">
+              <ul className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 font-mono text-xs uppercase tracking-wider text-[#7A7A72]">
                 {integrations.map((integration) => (
-                  <li key={integration}>{integration}</li>
+                  <li key={integration} className="transition-colors hover:text-[#E2E2DC]">
+                    [ {integration} ]
+                  </li>
                 ))}
               </ul>
             </div>
           </div>
 
-          <article className="overflow-hidden rounded-lg border border-[#2B2A24] bg-[#1B1B18]">
+          <article className="overflow-hidden rounded-lg border border-[#232320] bg-[#1B1B18] transition-colors hover:border-[#383730]">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2B2A24] px-5 py-4 sm:px-6">
               <p className="font-mono text-xs font-medium tracking-wide text-[#E2E2DC]">
                 INCIDENT #842: SEV-2 LATENCY SPIKE
@@ -113,7 +126,7 @@ export default function Home() {
                 <p className="font-mono text-xs text-[#A1A19A]">src/api/cache.ts · blame correlation</p>
                 <GitBranch aria-hidden="true" size={15} className="shrink-0 text-[#A1A19A]" />
               </div>
-              <div className="mt-5 overflow-x-auto rounded-md border border-[#2B2A24] bg-[#121211] p-4 font-mono text-xs leading-7">
+              <div className="mt-5 overflow-x-auto rounded-md border border-[#232320] bg-[#121211] p-4 font-mono text-xs leading-7 transition-colors hover:border-[#383730]">
                 <p className="text-[#77766F]">@@ -41,7 +41,7 @@ async function getCachedRecord</p>
                 <p className="whitespace-pre text-[#A1A19A]">  const record = await cache.get(key);</p>
                 <p className="whitespace-pre bg-[#EF4444]/10 text-[#EF4444]">
@@ -153,7 +166,7 @@ export default function Home() {
           </div>
           <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {pipeline.map((step, index) => (
-              <li key={step.number} className="relative min-h-52 border border-[#2B2A24] bg-[#1B1B18] p-5 md:p-6">
+              <li key={step.number} className="relative min-h-52 border border-[#232320] bg-[#1B1B18] p-5 transition-colors hover:border-[#383730] md:p-6">
                 <div className="flex items-center gap-3 font-mono text-xs tracking-wide text-[#F59E0B]">
                   <span>{step.number}</span>
                   <span aria-hidden="true" className="h-px flex-1 bg-[#2B2A24]" />
@@ -164,6 +177,9 @@ export default function Home() {
                 </div>
                 <h3 className="mt-7 text-lg font-semibold leading-6 text-[#E2E2DC]">{step.title}</h3>
                 <p className="mt-3 text-sm leading-6 text-[#A1A19A]">{step.detail}</p>
+                <p className={`mt-5 inline-flex max-w-full rounded-sm border border-[#2B2A24] bg-[#121211] px-2 py-1 font-mono text-[10px] leading-5 break-all ${step.traceClassName}`}>
+                  {step.trace}
+                </p>
               </li>
             ))}
           </ol>
@@ -175,14 +191,14 @@ export default function Home() {
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Autonomy, with guardrails.</h2>
           </div>
           <div className="grid gap-4 lg:grid-cols-3 lg:grid-rows-[minmax(230px,auto)_minmax(210px,auto)]">
-            <article className="rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-6 sm:p-8 lg:col-span-2">
+            <article className="rounded-lg border border-[#232320] bg-[#1B1B18] p-6 transition-colors hover:border-[#383730] sm:p-8 lg:col-span-2">
               <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">01 / Execution safety</p>
               <h3 className="mt-4 text-2xl font-semibold tracking-tight">Deterministic Guardrails &amp; Sandboxing</h3>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-[#A1A19A]">
                 Proposed changes run in an isolated environment. The patch is held until required checks pass.
               </p>
               {/* Static terminal preview; wire this panel to live sandbox runs when telemetry is available. */}
-              <div className="mt-6 rounded-md border border-[#2B2A24] bg-[#121211] p-4 font-mono text-xs leading-6">
+              <div className="mt-6 rounded-md border border-[#232320] bg-[#121211] p-4 font-mono text-xs leading-6 transition-colors hover:border-[#383730]">
                 <p className="text-[#77766F]">$ healix verify --branch fix/cache-refresh</p>
                 <p className="mt-2 text-[#A1A19A]">[1/3] unit tests <span className="text-[#10B981]">passed</span></p>
                 <p className="text-[#A1A19A]">[2/3] regression suite <span className="text-[#10B981]">passed</span></p>
@@ -191,7 +207,7 @@ export default function Home() {
               </div>
             </article>
 
-            <article className="rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-6 sm:p-8">
+            <article className="rounded-lg border border-[#232320] bg-[#1B1B18] p-6 transition-colors hover:border-[#383730] sm:p-8">
               <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">02 / Operator control</p>
               <h3 className="mt-4 text-xl font-semibold">Human-in-the-Loop Safeguards</h3>
               <p className="mt-3 text-sm leading-6 text-[#A1A19A]">
@@ -208,7 +224,7 @@ export default function Home() {
               </div>
             </article>
 
-            <article className="rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-6 sm:p-8 lg:col-span-1">
+            <article className="rounded-lg border border-[#232320] bg-[#1B1B18] p-6 transition-colors hover:border-[#383730] sm:p-8 lg:col-span-1">
               <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">03 / Codebase context</p>
               <h3 className="mt-4 text-xl font-semibold">Repository Graph Embeddings</h3>
               <p className="mt-3 text-sm leading-6 text-[#A1A19A]">
@@ -221,7 +237,7 @@ export default function Home() {
               </div>
             </article>
 
-            <article className="rounded-lg border border-[#F59E0B]/40 bg-[#1B1B18] p-6 sm:p-8 lg:col-span-2">
+            <article className="rounded-lg border border-[#232320] bg-[#1B1B18] p-6 transition-colors hover:border-[#383730] sm:p-8 lg:col-span-2">
               <p className="font-mono text-xs uppercase tracking-wider text-[#F59E0B]">04 / Incident impact</p>
               {/* Static illustrative metrics; replace with verified customer telemetry before publishing live results. */}
               <div className="mt-6 grid gap-6 sm:grid-cols-2 sm:gap-10">
@@ -243,8 +259,8 @@ export default function Home() {
             <p className="font-mono text-xs uppercase tracking-[0.15em] text-[#F59E0B]">A different on-call</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">The alert still arrives. The night changes.</h2>
           </div>
-          <div className="grid overflow-hidden rounded-lg border border-[#2B2A24] md:grid-cols-2">
-            <article className="bg-[#1B1B18] p-6 sm:p-8">
+          <div className="grid gap-4 md:grid-cols-2">
+            <article className="rounded-lg border border-[#232320] bg-[#121211] p-6 text-[#70706B] transition-colors hover:border-[#383730] sm:p-8">
               <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">Traditional incident response</p>
               <ol className="mt-6 flex flex-col gap-4">
                 {[
@@ -256,15 +272,15 @@ export default function Home() {
                 ].map(([time, event], index) => (
                   <li key={event} className="flex gap-4">
                     <span className="w-16 shrink-0 font-mono text-xs text-[#77766F]">{time}</span>
-                    <span className="relative flex-1 border-l border-[#2B2A24] pb-1 pl-4 text-sm text-[#A1A19A]">
-                      {index < 4 && <span aria-hidden="true" className="absolute -left-1 top-1 size-2 rounded-full bg-[#77766F]" />}
-                      {event}
+                    <span className="relative flex-1 border-l border-[#2B2A24] pb-1 pl-4 text-sm text-[#70706B]">
+                      <span aria-hidden="true" className="absolute -left-1 top-1 size-2 rounded-full border border-red-800/40 bg-red-950 text-red-400" />
+                      {index === 4 ? <span className="line-through">{event}</span> : event}
                     </span>
                   </li>
                 ))}
               </ol>
             </article>
-            <article className="border-t border-[#2B2A24] bg-[#1B1B18] p-6 md:border-l md:border-t-0 sm:p-8">
+            <article className="rounded-lg border border-[#2B2A24] bg-[#181815] p-6 sm:p-8">
               <p className="font-mono text-xs uppercase tracking-wider text-[#F59E0B]">Healix autonomous remediation</p>
               <ol className="mt-6 flex flex-col gap-4">
                 {[
@@ -272,12 +288,18 @@ export default function Home() {
                   ["3:01 AM", "Automated triage & verification"],
                   ["3:04 AM", "Verified PR ready in inbox"],
                   ["9:00 AM", "One-click review"],
-                ].map(([time, event]) => (
+                ].map(([time, event], index) => (
                   <li key={event} className="flex gap-4">
                     <span className="w-16 shrink-0 font-mono text-xs text-[#77766F]">{time}</span>
                     <span className="relative flex-1 border-l border-[#2B2A24] pb-1 pl-4 text-sm text-[#E2E2DC]">
-                      <span aria-hidden="true" className="absolute -left-1 top-1 size-2 rounded-full bg-[#10B981]" />
-                      {event}
+                      {index < 3 && (
+                        <span aria-hidden="true" className="absolute -left-1 top-1 size-2 rounded-full border border-emerald-800/40 bg-emerald-950 text-emerald-400" />
+                      )}
+                      {index === 3 ? (
+                        <span className="inline-flex rounded border border-[#F59E0B]/50 bg-[#F59E0B]/10 px-2 py-1 font-mono text-xs text-[#F59E0B]">
+                          {time} • {event}
+                        </span>
+                      ) : event}
                     </span>
                   </li>
                 ))}
@@ -305,9 +327,21 @@ export default function Home() {
         <footer className="py-12">
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4 lg:grid-cols-5">
             <div className="col-span-2 sm:col-span-4 lg:col-span-1">
-              <Link href="/" className="inline-flex items-center gap-2 font-semibold tracking-tight text-[#E2E2DC]">
-                <span aria-hidden="true" className="size-2 rounded-full bg-[#F59E0B]" />
-                Healix
+              <Link href="/" className="inline-flex items-center gap-2" aria-label="Healix home">
+                <Image
+                  src="/Healix_Logo-clean.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="size-7 object-contain"
+                />
+                <Image
+                  src="/Healix_Text_Logo.png"
+                  alt="Healix"
+                  width={64}
+                  height={33}
+                  className="h-7 w-auto object-contain"
+                />
               </Link>
               <p className="mt-3 max-w-xs text-sm leading-6 text-[#A1A19A]">
                 Incident response with evidence, guardrails, and human control.
