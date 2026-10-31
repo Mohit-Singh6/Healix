@@ -53,10 +53,10 @@ export async function humanApprovalGate(
     where: { id: state.incidentId },
     data: {
       status: decision.status === "APPROVED" ? "MITIGATING" : "DISMISSED",
-      targetCommitSha:
-      typeof state.actionPayload?.targetCommitSha === "string"
-        ? state.actionPayload.targetCommitSha
-        : undefined,
+      humanApprovalStatus: decision.status,
+      operatorFeedback: decision.feedback,
+      reviewedBy: decision.reviewedBy,
+      decidedAt: new Date(),
     },
   });
 

@@ -46,6 +46,17 @@ export const ActionPayloadSchema = z.object({
   patchMode: z.enum(["FULL_FILE", "SEARCH_REPLACE"]).optional(),
   patchedFileContent: z.string().optional(),
   replacements: z.array(ReplacementItemSchema).optional(),
+
+  // Added later for APPLY_CONFIG_PATCH actions to track execution results
+  patchStatus: z.enum(["APPLIED", "FORWARDED_CUSTOM_WEBHOOK", "SKIPPED_NO_PROVIDER", "FAILED"]).optional(),
+  targetProvider: z.enum(["VERCEL", "RENDER", "CUSTOM", "NONE"]).optional(),
+  appliedKey: z.string().optional(),
+  appliedValue: z.string().optional(),
+  recommendedKey: z.string().optional(),
+  recommendedValue: z.string().optional(),
+  operatorActionRequired: z.string().optional(),
+  patchFailureReason: z.string().optional(),
+  webhookUrl: z.string().optional(),
 });
 
 export type ActionPayload = z.infer<typeof ActionPayloadSchema>;

@@ -176,27 +176,81 @@ export async function executeRemediationNode(
     }
   }
   else if (state.humanApprovalStatus === "APPROVED" && state.proposedAction === "APPLY_CONFIG_PATCH") {
-    console.log(`[Node E] Processing automated configuration patch...`);
+    console.log(`[Node E] Processing approved configuration patch...`);
 
-    const configKey = state.actionPayload?.configKey as string;
-    const configValue = state.actionPayload?.configValue as string;
+    const configKey = state.actionPayload?.configKey as string | undefined;
+    const configValue = state.actionPayload?.configValue as string | undefined;
 
-    if (configKey && configValue) {
+    // Fetch the project configuration associated with this incident
+    const incidentRecord = await prisma.incident.findUnique({
+      where: { id: state.incidentId },
+      include: { project: true },
+    });
+
+    const project = incidentRecord?.project;
+    const provider = project?.deploymentProvider || "NONE";
+
+    if (!configKey || configValue === undefined) {
+      const errorMsg = "Configuration patch aborted: Missing 'configKey' or 'configValue' in action payload.";
+      console.error(`[Node E] ${errorMsg}`);
+      state.actionPayload = {
+        ...state.actionPayload,
+        patchStatus: "FAILED",
+        patchFailureReason: errorMsg,
+      };
+    } else {
       try {
-        const vercelToken = process.env.VERCEL_API_TOKEN;
-        const vercelProjectId = process.env.VERCEL_PROJECT_ID;
-        const vercelTeamId = process.env.VERCEL_TEAM_ID;
+        switch (provider) {
+          case "RENDER": {
+            const apiKey = project?.platformApiToken || process.env.RENDER_API_KEY;
+            const serviceId = project?.platformServiceId || process.env.RENDER_SERVICE_ID;
 
-        if (vercelToken && vercelProjectId) {
-          console.log(`[Node E] Applying runtime patch to Vercel env: ${configKey}=${configValue}`);
+            if (!apiKey || !serviceId) {
+              throw new Error("Render credentials missing: platformApiToken or platformServiceId not configured.");
+            }
 
-          const queryParams = vercelTeamId ? `?teamId=${vercelTeamId}` : "";
-          const response = await fetch(
-            `https://api.vercel.com/v10/projects/${vercelProjectId}/env${queryParams}`,
-            {
+            console.log(`[Node E] Dispatching env update to Render Service: ${serviceId}`);
+            const response = await fetch(`https://api.render.com/v1/services/${serviceId}/env-vars`, {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify([{ key: configKey, value: configValue }]),
+            });
+
+            if (!response.ok) {
+              const errBody = await response.text();
+              throw new Error(`Render API responded with HTTP ${response.status}: ${errBody}`);
+            }
+
+            console.log(`[Node E] Successfully updated ${configKey} on Render.`);
+            state.actionPayload = {
+              ...state.actionPayload,
+              patchStatus: "APPLIED",
+              targetProvider: "RENDER",
+              appliedKey: configKey,
+              appliedValue: configValue,
+            };
+            break;
+          }
+
+          case "VERCEL": {
+            const token = project?.platformApiToken || process.env.VERCEL_API_TOKEN;
+            const projectId = project?.platformServiceId || process.env.VERCEL_PROJECT_ID;
+            const teamId = project?.platformTeamId || process.env.VERCEL_TEAM_ID;
+
+            if (!token || !projectId) {
+              throw new Error("Vercel credentials missing: platformApiToken or platformServiceId not configured.");
+            }
+
+            console.log(`[Node E] Dispatching env update to Vercel Project: ${projectId}`);
+            const query = teamId ? `?teamId=${teamId}` : "";
+            const response = await fetch(`https://api.vercel.com/v10/projects/${projectId}/env${query}`, {
               method: "POST",
               headers: {
-                Authorization: `Bearer ${vercelToken}`,
+                Authorization: `Bearer ${token}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
@@ -205,33 +259,88 @@ export async function executeRemediationNode(
                 type: "plain",
                 target: ["production", "preview"],
               }),
-            }
-          );
+            });
 
-          if (!response.ok) {
-            const errorDetails = await response.text();
-            throw new Error(`Vercel API returned status ${response.status}: ${errorDetails}`);
+            if (!response.ok) {
+              const errBody = await response.text();
+              throw new Error(`Vercel API responded with HTTP ${response.status}: ${errBody}`);
+            }
+
+            console.log(`[Node E] Successfully updated ${configKey} on Vercel.`);
+            state.actionPayload = {
+              ...state.actionPayload,
+              patchStatus: "APPLIED",
+              targetProvider: "VERCEL",
+              appliedKey: configKey,
+              appliedValue: configValue,
+            };
+            break;
           }
 
-          console.log(`[Node E] Successfully updated environment variable '${configKey}' on Vercel.`);
-        } else {
-          // Dev / Local fallback when live platform credentials are not populated
-          console.warn(
-            `[Node E] VERCEL_API_TOKEN or VERCEL_PROJECT_ID not set. Simulated configuration patch applied: ${configKey}=${configValue}`
-          );
+          case "CUSTOM": {
+            const webhookUrl = project?.customWebhookUrl;
+
+            if (!webhookUrl) {
+              throw new Error("Custom remediation webhook URL is not defined on the project.");
+            }
+
+            console.log(`[Node E] Forwarding config patch payload to custom webhook: ${webhookUrl}`);
+            const response = await fetch(webhookUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Healix-Signature": project.apiKey,
+              },
+              body: JSON.stringify({
+                event: "HEALIX_CONFIG_PATCH",
+                incidentId: state.incidentId,
+                configKey,
+                configValue,
+                timestamp: new Date().toISOString(),
+              }),
+            });
+
+            if (!response.ok) {
+              const errBody = await response.text();
+              throw new Error(`Custom webhook endpoint returned HTTP ${response.status}: ${errBody}`);
+            }
+
+            console.log(`[Node E] Custom webhook successfully acknowledged configuration patch.`);
+            state.actionPayload = {
+              ...state.actionPayload,
+              patchStatus: "FORWARDED_CUSTOM_WEBHOOK",
+              targetProvider: "CUSTOM",
+              webhookUrl,
+            };
+            break;
+          }
+
+          case "NONE":
+          default: {
+            const skipReason =
+              "Automated runtime configuration patch was diagnosed by Healix, but skipped because no deployment provider (Render/Vercel/Custom) or API credentials were linked to this project.";
+            console.warn(`[Node E] ${skipReason}`);
+            state.actionPayload = {
+              ...state.actionPayload,
+              patchStatus: "SKIPPED_NO_PROVIDER",
+              recommendedKey: configKey,
+              recommendedValue: configValue,
+              operatorActionRequired: `Manually set environment variable: ${configKey}=${configValue} in your hosting platform dashboard.`,
+            };
+            break;
+          }
         }
-      } catch (err) {
-        console.error(`[Node E] Failed to apply runtime configuration patch:`, err);
+      } catch (err: any) {
+        console.error(`[Node E] Failed to execute configuration patch:`, err);
+        state.actionPayload = {
+          ...state.actionPayload,
+          patchStatus: "FAILED",
+          patchFailureReason: err?.message || String(err),
+        };
       }
-    } else {
-      console.error(
-        `[Node E] Missing configKey or configValue in actionPayload:`,
-        state.actionPayload
-      );
     }
   }
-
-  // 2. Format Commits and Logs to avoid "[object Object]"
+// 2. Format Commits and Logs to avoid "[object Object]"
   const formattedCommits = state.candidateCommits.length > 0
     ? state.candidateCommits.map((c) => `SHA: ${c.sha}\nAuthor: ${c.author}\nDiff:\n${c.diff}`).join("\n---\n")
     : "No recent candidate commits.";
@@ -240,38 +349,59 @@ export async function executeRemediationNode(
     ? state.correlatedLogs.join("\n")
     : "No correlated logs.";
 
+  let mitigationOutcomeSummary = "Manual intervention required or no action taken.";
+
+  if (state.proposedAction === "BUGFIX_PR" || state.proposedAction === "REVERT_PR") {
+    mitigationOutcomeSummary = prUrl
+      ? `Remediation Pull Request successfully created at: ${prUrl}`
+      : "Failed to generate remediation Pull Request on GitHub.";
+  } else if (state.proposedAction === "APPLY_CONFIG_PATCH") {
+    const status = state.actionPayload?.patchStatus;
+    if (status === "APPLIED") {
+      mitigationOutcomeSummary = `Automated configuration patch applied to ${state.actionPayload?.targetProvider}: set ${state.actionPayload?.appliedKey}=${state.actionPayload?.appliedValue}.`;
+    } else if (status === "FORWARDED_CUSTOM_WEBHOOK") {
+      mitigationOutcomeSummary = `Configuration patch forwarded to custom webhook: ${state.actionPayload?.webhookUrl}.`;
+    } else if (status === "SKIPPED_NO_PROVIDER") {
+      mitigationOutcomeSummary = `Automated patch skipped: No cloud credentials or webhook configured for deploymentProvider (${state.actionPayload?.targetProvider || "NONE"}). Required manual update: ${state.actionPayload?.recommendedKey}=${state.actionPayload?.recommendedValue}.`;
+    } else {
+      mitigationOutcomeSummary = `Configuration patch attempt failed: ${state.actionPayload?.patchFailureReason || "Unknown error"}.`;
+    }
+  }
+
   const systemPrompt = `
-You are an expert site reliability engineer drafting an official post-mortem incident report.
+    You are an expert site reliability engineer drafting an official post-mortem incident report.
 
-INCIDENT CONTEXT:
-Service: ${state.serviceName}
-Error Title: ${state.errorMessage}
-Stack Trace:
-${state.stackTrace}
+    INCIDENT CONTEXT:
+    Service: ${state.serviceName}
+    Error Title: ${state.errorMessage}
+    Stack Trace:
+    ${state.stackTrace}
 
-CORRELATED LOGS:
-${formattedLogs}
+    CORRELATED LOGS:
+    ${formattedLogs}
 
-SUSPECT COMMITS:
-${formattedCommits}
+    SUSPECT COMMITS:
+    ${formattedCommits}
 
-DIAGNOSTIC HYPOTHESIS:
-${state.hypothesis}
+    DIAGNOSTIC HYPOTHESIS:
+    ${state.hypothesis}
 
-OPERATOR REVIEW DECISION:
-Status: ${state.humanApprovalStatus}
-Feedback: ${state.humanDecision?.feedback || "None"}
-Remediation PR: ${prUrl || "No automated PR opened"}
+    - Mitigation Outcome: ${mitigationOutcomeSummary}
 
-TASK:
-Generate a thorough, production-grade Post-Mortem report.
-Return JSON matching the schema with:
-- title: A concise incident title.
-- summary: Executive summary highlighting blast radius and service impact.
-- rootCause: Technical failure mechanism.
-- mitigationSteps: Concrete mitigation steps taken.
-- markdownContent: The complete formatted markdown report with clear headings (Executive Summary, Timeline, Root Cause, Mitigation, Preventative Recommendations).
-`;
+    OPERATOR REVIEW DECISION:
+    Status: ${state.humanApprovalStatus}
+    Feedback: ${state.humanDecision?.feedback || "None"}
+    Remediation PR: ${prUrl || "No automated PR opened"}
+
+    TASK:
+    Generate a thorough, production-grade Post-Mortem report.
+    Return JSON matching the schema with:
+    - title: A concise incident title.
+    - summary: Executive summary highlighting blast radius and service impact.
+    - rootCause: Technical failure mechanism.
+    - mitigationSteps: Concrete mitigation steps taken.
+    - markdownContent: The complete formatted markdown report with clear headings (Executive Summary, Timeline, Root Cause, Mitigation, Preventative Recommendations).
+  `;
 
   // 3. Generate Post-Mortem with Gemini
   const response = await ai.models.generateContent({
@@ -304,28 +434,34 @@ Return JSON matching the schema with:
   // 4. Finalize state in Neon DB
   const finalStatus = state.humanApprovalStatus === "APPROVED" ? "RESOLVED" : "DISMISSED";
 
+  // Update Incident
   await prisma.incident.update({
     where: { id: state.incidentId },
     data: {
       status: finalStatus,
-      revertPrUrl: prUrl,
+      remediationPrUrl: prUrl,
+      revertPrUrl: prUrl, // Keep populated for backward compatibility
+      actionPayload: state.actionPayload as any,
     },
   });
 
+  // Upsert PostMortem using parsed fields directly
   await prisma.postMortem.upsert({
     where: { incidentId: state.incidentId },
     update: {
-      summary: parsed.summary,
-      rootCause: parsed.rootCause,
-      mitigationSteps: parsed.mitigationSteps,
-      fullMarkdown: parsed.markdownContent,
+      title: parsed.title || "Incident Post-Mortem Report",
+      fullMarkdown: parsed.markdownContent || "",
+      summary: parsed.summary || state.hypothesis.slice(0, 500),
+      rootCause: parsed.rootCause || state.hypothesis,
+      mitigationSteps: parsed.mitigationSteps || mitigationOutcomeSummary,
     },
     create: {
       incidentId: state.incidentId,
-      summary: parsed.summary,
-      rootCause: parsed.rootCause,
-      mitigationSteps: parsed.mitigationSteps,
-      fullMarkdown: parsed.markdownContent,
+      title: parsed.title || "Incident Post-Mortem Report",
+      fullMarkdown: parsed.markdownContent || "",
+      summary: parsed.summary || state.hypothesis.slice(0, 500),
+      rootCause: parsed.rootCause || state.hypothesis,
+      mitigationSteps: parsed.mitigationSteps || mitigationOutcomeSummary,
     },
   });
 

@@ -6,6 +6,8 @@ import { deduplicateErrorLog, DeduplicationResult } from "../lib/deduplicate-log
 import { prisma } from "../lib/prisma";
 import http from "node:http";
 
+import { triageGraph } from "../agent/graph";
+
 console.log("Initializing Incident Triage Worker...");
 
 // Minimal HTTP server for Koyeb health checks
@@ -41,12 +43,48 @@ export const triageWorker = new Worker<AlertJobData, DeduplicationResult>(
 
     if (result.isNewIncident) {
       console.log(`[Job ${job.id}] Novel failure detected! Created Incident: ${result.incidentId}`);
-      
-      // In Phase 3: Trigger LangGraph AI triage investigation agent here
 
+      // 1. Link the threadId in Prisma so the UI and approval routes know the checkpoint thread
+      await prisma.incident.update({
+        where: { id: result.incidentId },
+        data: {
+          threadId: result.incidentId,
+          status: "INVESTIGATING",
+        },
+      });
 
+      console.log(`[Job ${job.id}] Invoking LangGraph Triage Pipeline for thread: ${result.incidentId}...`);
 
-    } else {
+      try {
+        // 2. Invoke the compiled LangGraph with initial state (arg 1) and config (arg 2)
+        const agentState = await triageGraph.invoke(
+          {
+            incidentId: result.incidentId,
+            serviceName: job.data.serviceName,
+            errorMessage: job.data.message,
+            stackTrace: job.data.stackTrace,
+            correlatedLogs: [],
+            candidateCommits: [],
+            hypothesis: "",
+            proposedAction: "MANUAL_INTERVENTION",
+            humanApprovalStatus: "PENDING",
+          },
+          {
+            configurable: {
+              thread_id: result.incidentId,
+            },
+          }
+        );
+
+        console.log(`[Job ${job.id}] LangGraph execution reached gate or completion.`);
+        console.log(`[Job ${job.id}] Current Action Proposed: ${agentState.proposedAction}`);
+        console.log(`[Job ${job.id}] Approval Status: ${agentState.humanApprovalStatus}`);
+      } catch (graphErr) {
+        console.error(`[Job ${job.id}] LangGraph execution failed:`, graphErr);
+        throw graphErr;
+      }
+    }
+    else {
       console.log(`[Job ${job.id}] Semantically clustered into active Incident: ${result.incidentId}`);
     }
 

@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,18 +9,39 @@ datasource db {
   provider = "postgresql"
 }
 
+enum DeploymentProvider {
+  VERCEL
+  RENDER
+  CUSTOM
+  NONE
+}
+
 model Project {
-  id            String     @id @default(cuid())
-  name          String
-  repoOwner     String     // ex: "octocat"
-  repoName      String     // ex: "backend-api"
-  deployedUrl   String?
-  apiKey        String     @unique @default(uuid()) // Authenticates incoming alert webhooks
-  userId        String
-  user          User       @relation("UserProjects", fields: [userId], references: [id], onDelete: Cascade)
-  incidents     Incident[]
-  errorLogs     ErrorLog[]
-  createdAt     DateTime   @default(now())
+  id                   String             @id @default(cuid())
+  name                 String
+  repoOwner            String             // ex: "octocat"
+  repoName             String             // ex: "backend-api"
+  defaultBranch        String             @default("main")
+  deployedUrl          String?
+  apiKey               String             @unique @default(uuid()) // Authenticates incoming alert webhooks
+
+  // GitHub Access Configuration
+  githubToken          String?            // Fine-grained PAT scoped to repo (Contents: RW, PRs: RW)
+  githubInstallationId String?            // Used if authenticated via GitHub App
+
+  // Cloud Platform Remediation Config (APPLY_CONFIG_PATCH)
+  deploymentProvider   DeploymentProvider @default(NONE)
+  platformServiceId    String?            // Render Service ID or Vercel Project ID
+  platformApiToken     String?            // API key/token with permission to update env vars
+  platformTeamId       String?            // Vercel Team ID (optional, for team-scoped Vercel projects)
+  customWebhookUrl     String?            // Webhook endpoint called when deploymentProvider is CUSTOM
+
+  userId               String
+  user                 User               @relation("UserProjects", fields: [userId], references: [id], onDelete: Cascade)
+  incidents            Incident[]
+  errorLogs            ErrorLog[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 }
 
 enum IncidentStatus {
@@ -39,26 +58,43 @@ enum IncidentSeverity {
   SEV3
 }
 
+enum HumanApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Incident {
-  id              String           @id @default(cuid())
-  projectId       String
-  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title           String
-  status          IncidentStatus   @default(INVESTIGATING)
-  severity        IncidentSeverity @default(SEV2)
-  threadId        String?          @unique // Maps directly to LangGraph checkpoint state
+  id                  String               @id @default(cuid())
+  projectId           String
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title               String
+  serviceName         String               @default("default")
+  errorMessage        String?              @db.Text
+  stackTrace          String?              @db.Text
+  status              IncidentStatus       @default(INVESTIGATING)
+  severity            IncidentSeverity     @default(SEV2)
+  threadId            String?              @unique // Maps directly to LangGraph checkpoint state
 
   // Agent Investigation & Mitigation Data
-  rootCause       String?          @db.Text
-  proposedAction  String?          // e.g., "REVERT_COMMIT"
-  targetCommitSha String?          // Commit SHA identified by the agent
-  revertPrUrl     String?          // GitHub PR URL opened by the agent
+  rootCause           String?              @db.Text
+  proposedAction      String?              // "REVERT_PR" | "BUGFIX_PR" | "APPLY_CONFIG_PATCH" | "MANUAL_INTERVENTION" | "NO_ACTION"
+  actionPayload       Json?                // Stores targetFilePath, patchMode, replacements, configKey, configValue, etc.
+  targetCommitSha     String?              // Culprit commit SHA identified by the agent
+  revertPrUrl         String?              // Backward compatibility field
+  remediationPrUrl    String?              // GitHub PR URL opened by the agent (for both REVERT_PR and BUGFIX_PR)
+
+  // Human-in-the-Loop (HITL) Gate Audit Trail
+  humanApprovalStatus HumanApprovalStatus  @default(PENDING)
+  operatorFeedback    String?              @db.Text
+  reviewedBy          String?              // Operator name or email
+  decidedAt           DateTime?
 
   // Relations
-  logs            ErrorLog[]
-  postMortem      PostMortem?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  logs                ErrorLog[]
+  postMortem          PostMortem?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@index([projectId, status])
 }
@@ -74,7 +110,7 @@ model ErrorLog {
   serviceName String    @default("default") // Distinguishes auth-api from checkout-worker
   message     String
   stackTrace  String    @db.Text
-  endpoint    String?   // (Your 'url')
+  endpoint    String?   // URL or route where error occurred
 
   // 768 dimensions matches Gemini text-embedding-004
   embedding   Unsupported("vector(768)")?
@@ -85,34 +121,36 @@ model ErrorLog {
 }
 
 model PostMortem {
-  id              String    @id @default(cuid())
-  incidentId      String    @unique
-  incident        Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  incidentId       String    @unique
+  incident         Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
-  summary         String    @db.Text // Brief executive summary
-  rootCause       String    @db.Text // Technical breakdown of why it failed
-  mitigationSteps String    @db.Text // What code/config fixed it
-  preventativeRecs Json?    // Array of action items to prevent recurrence
-  fullMarkdown    String    @db.Text // Rendered in your Phase 5 dashboard
+  title            String    @default("Incident Post-Mortem Report")
+  summary          String    @db.Text // Brief executive summary
+  rootCause        String    @db.Text // Technical breakdown of why it failed
+  mitigationSteps  String    @db.Text // What code/config fixed it
+  preventativeRecs Json?     // Array of action items to prevent recurrence
+  fullMarkdown     String    @db.Text // Rendered in dashboard
 
-  mttdSeconds     Int?      // Time from first error log to incident trigger
-  mttrSeconds     Int?      // Time from alert to final mitigation
-  createdAt       DateTime  @default(now())
+  mttdSeconds      Int?      // Time from first error log to incident trigger
+  mttrSeconds      Int?      // Time from alert to final mitigation
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model User {
-  id            String          @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String?
-  email         String          @unique
+  email         String    @unique
   emailVerified DateTime?
   image         String?
   accounts      Account[]
   projects      Project[] @relation("UserProjects")
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
- 
+
 model Account {
   userId            String
   type              String
@@ -125,11 +163,11 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
- 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@id([provider, providerAccountId])
 }
