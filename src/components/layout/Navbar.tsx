@@ -3,9 +3,15 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ArrowRight, LogOut } from "lucide-react";
-import { useDevMode } from "@/src/components/providers/DevModeProvider";
+import { logOut } from "@/src/app/auth/actions";
+
+type NavbarUser = {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+};
 
 function Brand() {
   return (
@@ -18,43 +24,51 @@ function Brand() {
   );
 }
 
-function OperatorMenu() {
+function OperatorMenu({ user }: { user: NavbarUser }) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const { setIsLoggedIn } = useDevMode();
-  const router = useRouter();
-
-  function logOut() {
-    setIsLoggedIn(false);
-    setIsUserMenuOpen(false);
-    router.push("/");
-  }
+  const displayName = user.name || user.email || "Healix operator";
+  const initials = displayName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <div className="relative shrink-0">
       <button
         type="button"
-        aria-label="MS, open operator menu"
+        aria-label={`Open user menu for ${displayName}`}
         aria-expanded={isUserMenuOpen}
         onClick={() => setIsUserMenuOpen((open) => !open)}
-        className="flex size-8 cursor-pointer items-center justify-center rounded-full border border-[#33322C] bg-[#1E1E1B] font-mono text-xs font-medium leading-none text-[#EDEDE8] transition-colors hover:border-[#F59E0B]"
+        className="flex size-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-[#33322C] bg-[#1E1E1B] font-mono text-xs font-medium leading-none text-[#EDEDE8] transition-colors hover:border-[#F59E0B]"
       >
-        MS
+        {user.image ? (
+          <Image
+            src={user.image}
+            alt=""
+            width={32}
+            height={32}
+            className="size-full object-cover"
+          />
+        ) : initials}
       </button>
       {isUserMenuOpen && (
         <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-lg border border-[#2B2A24] bg-[#181816] p-2 shadow-2xl">
           <div className="px-3 py-2">
-            <p className="text-sm font-medium text-[#EDEDE8]">Mohit Singh</p>
-            <p className="mt-1 font-mono text-[11px] text-[#8A8A82]">operator@healix.internal</p>
+            <p className="text-sm font-medium text-[#EDEDE8]">{displayName}</p>
+            {user.email && <p className="mt-1 font-mono text-xs text-[#8A8A82]">{user.email}</p>}
             <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-[#F59E0B]">Operator</p>
           </div>
           <div className="my-1 border-t border-[#2B2A24]" />
-          <button
-            type="button"
-            onClick={logOut}
-            className="flex w-full items-center justify-between rounded px-3 py-2 text-left font-mono text-xs text-[#EDEDE8] transition-colors hover:bg-rose-950/10 hover:text-rose-200"
-          >
-            Log Out <LogOut aria-hidden="true" size={14} />
-          </button>
+          <form action={logOut}>
+            <button
+              type="submit"
+              className="flex w-full items-center justify-between rounded px-3 py-2 text-left font-mono text-xs text-[#EDEDE8] transition-colors hover:bg-rose-950/10 hover:text-rose-200"
+            >
+              Log Out <LogOut aria-hidden="true" size={14} />
+            </button>
+          </form>
         </div>
       )}
     </div>
@@ -86,11 +100,10 @@ function InternalLinks({ pathname }: { pathname: string }) {
   );
 }
 
-export default function Navbar() {
+export default function Navbar({ user }: { user: NavbarUser | null }) {
   const pathname = usePathname();
-  const { isLoggedIn } = useDevMode();
   const isInternalRoute = pathname === "/dashboard" || pathname.startsWith("/incidents/");
-  const showInternalNav = isInternalRoute || isLoggedIn;
+  const showInternalNav = isInternalRoute || Boolean(user);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[#232320] bg-[#121211]/90 backdrop-blur-md">
@@ -107,7 +120,7 @@ export default function Navbar() {
               >
                 <span aria-hidden="true">+</span> Add Project
               </Link>
-              <OperatorMenu />
+              {user && <OperatorMenu user={user} />}
             </div>
           </div>
         ) : pathname === "/auth" ? null : (
