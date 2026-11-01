@@ -55,7 +55,8 @@ export interface DashboardIncident {
   service: string;
   volume: number;
   createdAt: string;
-  age: string;
   status: IncidentStatus;
+  humanApprovalStatus: IncidentData["humanApprovalStatus"];
+  reviewedBy: string | null;
   target: string | null;
 }

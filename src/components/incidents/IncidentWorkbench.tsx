@@ -8,12 +8,14 @@ import {
   Check,
   CircleAlert,
   Clipboard,
+  Copy,
   GitCommitHorizontal,
   Pause,
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { IncidentData } from "@/src/components/incidents/incident-data";
+import { formatDateTimeIST, formatMarkdownTimesIST, formatTimeIST, formatTimestampIST } from "@/src/lib/date-time";
 
 type ReportSection = {
   depth: number;
@@ -32,9 +34,7 @@ type TabId = (typeof tabs)[number]["id"];
 function timeLabel(value: string | null): string | null {
   if (!value) return null;
   const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? null
-    : date.toLocaleTimeString("en-GB", { hour12: false, timeZone: "UTC" });
+  return Number.isNaN(date.getTime()) ? null : formatTimeIST(date);
 }
 
 function actionLabel(incident: IncidentData): string {
@@ -77,32 +77,42 @@ function parseReportSections(markdown: string): ReportSection[] {
 }
 
 function TimelineMarkdown({ markdown }: { markdown: string }) {
-  const entries = markdown.split(/\r?\n/).filter((line) => line.trim());
   const timestampPattern =
-    /(?:\*\*)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\s?UTC|Z)?|\d{2}:\d{2}(?::\d{2})?(?:\s?UTC)?)(?:\*\*)?/;
+    /\b(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\s?UTC|Z)?|\d{2}:\d{2}(?::\d{2})?(?:\s?UTC)?)\b/i;
+  const entries: string[] = [];
+  let previousLineWasBlank = true;
+
+  for (const rawLine of markdown.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) {
+      previousLineWasBlank = true;
+      continue;
+    }
+
+    const isListItem = /^(?:[-*+]|\d+\.)\s+/.test(line);
+    if (!entries.length || isListItem || previousLineWasBlank || timestampPattern.test(line)) {
+      entries.push(line.replace(/^(?:[-*+]|\d+\.)\s+/, ""));
+    } else {
+      entries[entries.length - 1] += ` ${line}`;
+    }
+    previousLineWasBlank = false;
+  }
 
   return (
-    <div className="ml-2 border-l border-[#2B2A24] pl-4">
+    <div className="ml-2 flex flex-col gap-1 border-l border-[#2B2A24] pl-4">
       {entries.map((entry, index) => {
         const timestamp = entry.match(timestampPattern);
-        const description = entry
-          .replace(/^\s*(?:[-*+]|\d+\.)\s*/, "")
+        const rawDescription = entry
           .replace(timestampPattern, "")
           .replace(/^[\s:—–-]+/, "");
-
-        if (!timestamp) {
-          return (
-            <div key={`${index}-${entry}`} className="py-2">
-              <ReactMarkdown>{entry}</ReactMarkdown>
-            </div>
-          );
-        }
+        const hasUnmatchedBold = (rawDescription.match(/\*\*/g)?.length ?? 0) % 2 === 1;
+        const description = hasUnmatchedBold ? rawDescription.replace(/\*\*/g, "") : rawDescription;
 
         return (
-          <div key={`${index}-${entry}`} className="relative flex items-start gap-4 py-2">
+          <div key={`${index}-${entry}`} className="relative grid grid-cols-[minmax(8.5rem,auto)_minmax(0,1fr)] items-start gap-x-4 py-2">
             <span aria-hidden="true" className="absolute -left-[21px] top-3.5 size-2 rounded-full bg-[#3B3A34]" />
-            <span className="shrink-0 pt-0.5 font-mono text-xs text-[#F59E0B]">{timestamp[1]}</span>
-            <div className="min-w-0 text-sm leading-relaxed text-[#D4D4CE] [&_p]:my-0 [&_p+p]:mt-2">
+            <span className="pt-0.5 font-mono text-xs text-[#F59E0B]">{timestamp ? formatTimestampIST(timestamp[1]) : ""}</span>
+            <div className="min-w-0 text-sm leading-relaxed text-[#D4D4CE] [&_p]:my-0 [&_p+p]:mt-2 [&_code]:whitespace-normal">
               <ReactMarkdown>{description}</ReactMarkdown>
             </div>
           </div>
@@ -143,18 +153,17 @@ export default function IncidentWorkbench({
     ? parseReportSections(incidentData.postMortemMarkdown)
     : [];
   const reportTitle = reportSections.find((section) => section.depth === 1)?.heading ?? "Incident Post-Mortem";
-  const statusTone = isResolved
-    ? "text-emerald-400"
-    : isPending || isMitigating
-      ? "text-[#F59E0B]"
-      : isDismissed
-        ? "text-rose-300"
-        : "text-[#A1A19A]";
-  const severityClass = incidentData.severity === "CRITICAL"
-    ? "text-rose-400"
-    : incidentData.severity === "HIGH"
-      ? "text-[#F59E0B]"
-      : "text-[#A1A19A]";
+  const statusLabel = isResolved
+    ? "Resolved"
+    : isDismissed
+      ? "Dismissed"
+      : incidentData.humanApprovalStatus === "APPROVED"
+        ? "Approved · In progress"
+        : isPending
+          ? "Pending review"
+          : isMitigating
+            ? "Mitigating"
+            : "Investigating";
 
   async function copyThreadId() {
     if (!navigator.clipboard) {
@@ -272,8 +281,8 @@ export default function IncidentWorkbench({
 
   return (
     <main className="mx-auto w-full max-w-[1600px] flex-1 bg-[#121211] px-5 pb-20 pt-8 text-[#EDEDE8] sm:px-8 lg:px-12">
-      <Link href="/dashboard" className="inline-flex items-center gap-2 font-mono text-xs text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
-        <ArrowLeft aria-hidden="true" size={14} />
+      <Link href="/dashboard" className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#2B2A24] bg-[#181816] px-3 font-mono text-sm text-[#A1A19A] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8]">
+        <ArrowLeft aria-hidden="true" size={17} />
         War Room
       </Link>
 
@@ -333,35 +342,58 @@ export default function IncidentWorkbench({
         </ol>
       </div>
 
-      <header className="mt-6 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-        <div className="min-w-0">
-          <div className="mb-4 inline-flex max-w-full flex-nowrap items-center overflow-x-auto rounded-md border border-[#2B2A24] bg-[#181816] font-mono text-xs divide-x divide-[#2B2A24]">
-            <span className="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 font-medium text-[#EDEDE8]">
-              <span className="text-[#8E8E86]">SVC:</span> {incidentData.service}
+      <header className="mb-6 mt-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-3xl font-bold tracking-tight text-[#EDEDE8] sm:text-4xl">{incidentData.displayId}</h1>
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-xs font-medium ${
+              isResolved
+                ? "border-emerald-500/30 bg-emerald-950/60 text-emerald-400"
+                : isDismissed
+                  ? "border-rose-500/30 bg-rose-950/50 text-rose-400"
+                  : incidentData.humanApprovalStatus === "APPROVED"
+                    ? "border-emerald-500/30 bg-emerald-950/60 text-emerald-400"
+                    : isPending
+                      ? "border-[#F59E0B]/30 bg-[#F59E0B]/10 text-[#F59E0B]"
+                      : "border-[#383730] bg-[#1B1B18] text-[#A1A19A]"
+            }`}>
+              <span className={`size-1.5 rounded-full ${isResolved || incidentData.humanApprovalStatus === "APPROVED" ? "bg-emerald-400" : isDismissed ? "bg-rose-400" : isPending ? "bg-[#F59E0B]" : "bg-[#77766F]"}`} />
+              {statusLabel}
             </span>
-            <span className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 font-semibold ${severityClass}`}>
-              <span className={`size-1.5 rounded-full ${incidentData.severity === "CRITICAL" ? "bg-rose-500" : incidentData.severity === "HIGH" ? "bg-[#F59E0B]" : "bg-[#77766F]"}`} />
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-xs font-medium ${
+              incidentData.severity === "CRITICAL"
+                ? "border-rose-500/30 bg-rose-950/50 text-rose-400"
+                : incidentData.severity === "HIGH"
+                  ? "border-[#F59E0B]/30 bg-[#F59E0B]/10 text-[#F59E0B]"
+                  : "border-[#383730] bg-[#1B1B18] text-[#A1A19A]"
+            }`}>
+              <span className={`size-1.5 rounded-full ${incidentData.severity === "CRITICAL" ? "bg-rose-400" : incidentData.severity === "HIGH" ? "bg-[#F59E0B]" : "bg-[#77766F]"}`} />
               {incidentData.severity}
             </span>
-            <span className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 font-semibold ${statusTone}`}>
-              <span className={`size-1.5 rounded-full ${isResolved ? "bg-emerald-500" : isPending || isMitigating ? "bg-[#F59E0B]" : isDismissed ? "bg-rose-500" : "bg-[#77766F]"}`} />
-              {incidentData.status.replaceAll("_", " ")}
-            </span>
-            <time dateTime={incidentData.timestamp} className="whitespace-nowrap px-3 py-1.5 text-[#8E8E86]">
-              {incidentData.timestamp.replace("T", " ").replace("Z", " UTC")}
-            </time>
           </div>
-          <h1 className="mt-3 font-mono text-3xl font-semibold tracking-tight text-[#EDEDE8] sm:text-4xl">{incidentData.displayId}</h1>
-          <p className="mt-2 text-base font-medium text-[#D4D4CE]">{incidentData.title}</p>
+          <p className="mt-2 break-words font-mono text-base text-[#D4D4CE]">{incidentData.title}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 font-mono text-xs text-[#8E8E86]">
+            <span className="rounded border border-[#2B2A24] bg-[#1E1E1B] px-2 py-0.5 text-[#EDEDE8]">{incidentData.service}</span>
+            <span aria-hidden="true">·</span>
+            <span>Detected <time dateTime={incidentData.timestamp}>{formatDateTimeIST(incidentData.timestamp)}</time></span>
+            <span aria-hidden="true">·</span>
+            <span className="max-w-full break-words">
+              Root cause: {incidentData.suspectCommit.hash
+                ? `Regression commit ${incidentData.suspectCommit.hash.slice(0, 8)}`
+                : incidentData.proposedAction
+                  ? "no regression commit linked"
+                  : "under investigation"}
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col items-start gap-1 lg:items-end">
+        <div className="flex shrink-0 flex-col items-start gap-1 pt-1 md:items-end">
           <button
             type="button"
             onClick={copyThreadId}
-            className="inline-flex min-h-9 items-center gap-2 rounded border border-[#383730] bg-[#1B1B18] px-3 font-mono text-xs text-[#A1A19A] transition-colors hover:text-[#EDEDE8]"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-[#2B2A24] bg-[#181816] px-3 font-mono text-sm text-[#A1A19A] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8]"
           >
-            {copyMessage === "Incident ID copied." ? <Check aria-hidden="true" size={14} /> : <Clipboard aria-hidden="true" size={14} />}
-            Copy Incident ID
+            {copyMessage === "Incident ID copied." ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
+            Copy ID
           </button>
           <p aria-live="polite" className="min-h-4 text-xs text-[#8A8A82]">{copyMessage}</p>
         </div>
@@ -450,7 +482,7 @@ export default function IncidentWorkbench({
             )}
             {incidentData.reviewedBy && incidentData.decidedAt && (
               <p className="mt-2 font-mono text-xs text-[#8E8E86]">
-                Reviewed by {incidentData.reviewedBy} · {incidentData.decidedAt.replace("T", " ").replace("Z", " UTC")}
+                Reviewed by {incidentData.reviewedBy} · {formatDateTimeIST(incidentData.decidedAt)}
               </p>
             )}
           </div>
@@ -518,7 +550,7 @@ export default function IncidentWorkbench({
                 <p className="mt-2 text-base leading-relaxed text-[#A1A19A]">
                   {incidentData.suspectCommit.file ?? "Source file unavailable"}
                   {incidentData.suspectCommit.functionName ? ` · ${incidentData.suspectCommit.functionName}` : ""}
-                  {incidentData.suspectCommit.time ? ` · ${incidentData.suspectCommit.time}` : ""}
+                  {incidentData.suspectCommit.time ? ` · ${formatDateTimeIST(incidentData.suspectCommit.time)}` : ""}
                 </p>
                 {incidentData.suspectCommit.message && <p className="mt-2 text-base text-[#8E8E86]">{incidentData.suspectCommit.message}</p>}
               </>
@@ -635,8 +667,8 @@ export default function IncidentWorkbench({
       <section aria-labelledby="postmortem-heading" className="mt-7 rounded-lg border border-[#262520] bg-[#161614] p-6 shadow-xl sm:p-8 md:p-10">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">EXECUTIVE POST-MORTEM REPORT</p>
-            {incidentData.postMortemMarkdown && <span className="font-mono text-xs text-emerald-400">REPORT GENERATED</span>}
+            <p className="font-mono text-lg uppercase tracking-wider text-[#8E8E86]">POST-MORTEM REPORT</p>
+            {incidentData.postMortemMarkdown && <span className="font-mono text-sm text-emerald-400">REPORT GENERATED</span>}
           </div>
           {incidentData.postMortemMarkdown && (
             <div className="flex flex-col items-start gap-1 sm:items-end">
@@ -666,12 +698,12 @@ export default function IncidentWorkbench({
                   {section.heading && <HeadingTag>{section.heading}</HeadingTag>}
                   {isSummary ? (
                     <div className="my-4 rounded-r-md border-l-4 border-emerald-500 bg-[#1A1A17] p-5 text-base leading-relaxed text-[#E2E2DC] [&_p]:my-0 [&_p+p]:mt-3">
-                      <ReactMarkdown>{section.markdown}</ReactMarkdown>
+                      <ReactMarkdown>{formatMarkdownTimesIST(section.markdown)}</ReactMarkdown>
                     </div>
                   ) : isTimeline ? (
                     <TimelineMarkdown markdown={section.markdown} />
                   ) : (
-                    <ReactMarkdown>{section.markdown}</ReactMarkdown>
+                    <ReactMarkdown>{formatMarkdownTimesIST(section.markdown)}</ReactMarkdown>
                   )}
                 </section>
               );

@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
 import {
+  Activity,
   ArrowDownRight,
   ArrowRight,
+  Ban,
+  CheckCircle2,
+  Clock3,
   CircleAlert,
   Copy,
   ExternalLink,
@@ -14,6 +18,7 @@ import {
 } from "lucide-react";
 import StatusBadge from "@/src/components/ui/StatusBadge";
 import type { DashboardIncident } from "@/src/components/incidents/incident-data";
+import { formatDateTimeIST } from "@/src/lib/date-time";
 import {
   createProject,
   getProjectWebhookUrl,
@@ -57,6 +62,53 @@ function MetricCell({ label, value, detail, highlight = false }: {
 async function copyText(value: string) {
   if (!navigator.clipboard) throw new Error("Clipboard access is unavailable in this browser.");
   await navigator.clipboard.writeText(value);
+}
+
+function incidentOutcome(incident: DashboardIncident) {
+  if (incident.status === "RESOLVED") {
+    return {
+      label: "Solved",
+      detail: incident.reviewedBy ? `Approved by ${incident.reviewedBy}` : "Remediation completed",
+      tone: "healthy" as const,
+      icon: <CheckCircle2 aria-hidden="true" size={14} />,
+    };
+  }
+
+  if (incident.status === "DISMISSED") {
+    return {
+      label: "Dismissed",
+      detail: incident.humanApprovalStatus === "REJECTED"
+        ? `Rejected by ${incident.reviewedBy ?? "operator"}`
+        : "Remediation dismissed",
+      tone: "muted" as const,
+      icon: <Ban aria-hidden="true" size={14} />,
+    };
+  }
+
+  if (incident.humanApprovalStatus === "APPROVED") {
+    return {
+      label: "Approved",
+      detail: incident.reviewedBy ? `By ${incident.reviewedBy} · remediation in progress` : "Remediation in progress",
+      tone: "healthy" as const,
+      icon: <CheckCircle2 aria-hidden="true" size={14} />,
+    };
+  }
+
+  if (incident.status === "PENDING_APPROVAL") {
+    return {
+      label: "Awaiting review",
+      detail: "Action requires your approval",
+      tone: "high" as const,
+      icon: <CircleAlert aria-hidden="true" size={14} />,
+    };
+  }
+
+  return {
+    label: "Investigating",
+    detail: "Automated triage in progress",
+    tone: "muted" as const,
+    icon: <CircleAlert aria-hidden="true" size={14} />,
+  };
 }
 
 type DeploymentProvider = "NONE" | "VERCEL" | "RENDER" | "CUSTOM";
@@ -342,50 +394,67 @@ export default function DashboardView({
               <p className="mt-2 text-base text-[#8E8E86]">Alerts from your registered services will appear here.</p>
             </div>
           )}
-          {initialIncidents.map((incident) => (
-            <article
-              key={incident.id}
-              className={`relative overflow-hidden rounded-lg border bg-[#181816] p-4 transition-colors sm:p-5 ${
-                incident.status === "PENDING_APPROVAL" ? "border-amber-500/40 hover:border-amber-500/70" : "border-[#232320] hover:border-[#383730]"
-              }`}
-            >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center justify-start gap-2.5">
+          {initialIncidents.map((incident) => {
+            const outcome = incidentOutcome(incident);
+            return (
+              <article
+                key={incident.id}
+                className={`relative overflow-hidden rounded-lg border bg-[#181816] p-4 transition-colors sm:p-5 ${
+                  incident.status === "PENDING_APPROVAL" ? "border-amber-500/40 hover:border-amber-500/70" : "border-[#232320] hover:border-[#383730]"
+                }`}
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2.5">
                       <StatusBadge tone={incident.severity === "CRITICAL" ? "critical" : incident.severity === "HIGH" ? "high" : "muted"}>
                         {incident.severity === "CRITICAL" ? <CircleAlert aria-hidden="true" size={14} /> : <ArrowDownRight aria-hidden="true" size={14} />}
                         {incident.severity}
                       </StatusBadge>
                       <span className="font-mono text-sm font-semibold text-[#EDEDE8]">{incident.displayId}</span>
+                      <StatusBadge tone={outcome.tone}>
+                        {outcome.icon}
+                        {outcome.label}
+                      </StatusBadge>
+                      {incident.status === "PENDING_APPROVAL" && (
+                        <span className="font-mono text-xs text-amber-400">{outcome.detail}</span>
+                      )}
                     </div>
-                    {incident.status === "PENDING_APPROVAL" && (
-                      <span className="inline-flex items-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 font-mono text-xs font-medium text-amber-400">
-                        Action Required: Awaiting Your Review
-                      </span>
-                    )}
+                    <p className="mt-2 truncate font-mono text-sm leading-relaxed text-[#D4D4CE]" title={incident.signature}>{incident.signature}</p>
+                    <p className="mt-1 font-mono text-sm text-[#8E8E86]">{incident.target ?? "Source location unavailable"}</p>
                   </div>
-                  <p className="mt-2 truncate font-mono text-sm leading-relaxed text-[#D4D4CE]" title={incident.signature}>{incident.signature}</p>
-                  <p className="mt-1 font-mono text-sm text-[#8E8E86]">{incident.target ?? "Source location unavailable"}</p>
+                  <div className="flex flex-col items-start gap-3 lg:items-end">
+                    <span className="text-base text-[#D4D4CE]">{incident.service}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#2B2A24] bg-[#141412] px-3 font-mono text-sm text-[#A1A19A]">
+                        <Activity aria-hidden="true" size={15} />
+                        {incident.volume} {incident.volume === 1 ? "event" : "events"}
+                      </span>
+                      <time
+                        dateTime={incident.createdAt}
+                        className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#2B2A24] bg-[#141412] px-3 font-mono text-sm text-[#A1A19A]"
+                      >
+                        <Clock3 aria-hidden="true" size={15} />
+                        {formatDateTimeIST(incident.createdAt)}
+                      </time>
+                    </div>
+                    {incident.status !== "PENDING_APPROVAL" && outcome.detail && (
+                      <span className="text-xs text-[#8E8E86]">{outcome.detail}</span>
+                    )}
+                    <Link
+                      href={`/incidents/${incident.id}`}
+                      className={`inline-flex min-h-10 items-center gap-2 rounded-md px-3 font-mono text-sm transition-colors ${
+                        incident.status === "PENDING_APPROVAL"
+                          ? "bg-[#F59E0B] font-semibold text-black hover:bg-[#D97706]"
+                          : "bg-[#1E1E1B] text-[#D4D4CE] hover:bg-[#282723]"
+                      }`}
+                    >
+                      Investigate <ArrowRight aria-hidden="true" size={16} />
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 lg:justify-end">
-                  <span className="text-base text-[#D4D4CE]">{incident.service}</span>
-                  <span className="font-mono text-xs text-[#A1A19A]">{incident.volume} {incident.volume === 1 ? "event" : "events"}</span>
-                  <time dateTime={incident.createdAt} className="font-mono text-xs text-[#8E8E86]">{incident.age}</time>
-                  <Link
-                    href={`/incidents/${incident.id}`}
-                    className={`inline-flex items-center gap-1 rounded px-3 py-2 font-mono text-xs transition-colors ${
-                      incident.status === "PENDING_APPROVAL"
-                        ? "bg-[#F59E0B] font-semibold text-black hover:bg-[#D97706]"
-                        : "bg-[#1E1E1B] text-[#D4D4CE] hover:bg-[#282723]"
-                    }`}
-                  >
-                    Investigate <ArrowRight aria-hidden="true" size={14} />
-                  </Link>
-                </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </section>
 

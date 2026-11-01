@@ -1,5 +1,6 @@
 import type { IncidentSeverity, Prisma } from "@prisma/client";
 import type { DashboardIncident, IncidentData, ProposedIncidentAction } from "@/src/components/incidents/incident-data";
+import { formatDateTimeIST } from "@/src/lib/date-time";
 import { prisma } from "@/src/lib/prisma";
 
 type JsonRecord = Record<string, unknown>;
@@ -26,15 +27,6 @@ function severityLabel(severity: IncidentSeverity): IncidentData["severity"] {
 
 function displayIncidentId(id: string): string {
   return `INC-${id.slice(-6).toUpperCase()}`;
-}
-
-function formatAge(createdAt: Date): string {
-  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - createdAt.getTime()) / 60_000));
-  if (elapsedMinutes < 1) return "just now";
-  if (elapsedMinutes < 60) return `${elapsedMinutes} min ago`;
-  const hours = Math.floor(elapsedMinutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  return `${Math.floor(hours / 24)} day ago`;
 }
 
 function proposedActionFrom(value: string | null): ProposedIncidentAction | null {
@@ -123,6 +115,8 @@ export async function listUserIncidents(userId: string): Promise<DashboardIncide
       stackTrace: true,
       severity: true,
       status: true,
+      humanApprovalStatus: true,
+      reviewedBy: true,
       actionPayload: true,
       createdAt: true,
       _count: { select: { logs: true } },
@@ -147,8 +141,9 @@ export async function listUserIncidents(userId: string): Promise<DashboardIncide
       service: incident.serviceName === "default" ? incident.project.name : incident.serviceName,
       volume: incident._count.logs,
       createdAt: incident.createdAt.toISOString(),
-      age: formatAge(incident.createdAt),
       status: incident.status,
+      humanApprovalStatus: incident.humanApprovalStatus,
+      reviewedBy: incident.reviewedBy,
       target: getString(payload, "targetFilePath") ?? targetFromStackTrace(stackTrace),
     };
   });
@@ -210,7 +205,7 @@ export async function getUserIncident(userId: string, incidentId: string): Promi
           ? "WARN"
           : "INFO";
       const status = log.statusCode ? ` HTTP ${log.statusCode}` : "";
-      return `${log.createdAt.toISOString()} ${level}${status} ${log.message}`;
+      return `${formatDateTimeIST(log.createdAt)} ${level}${status} ${log.message}`;
     });
 
   const commitHash = incident.targetCommitSha ?? getString(payload, "targetCommitSha");
