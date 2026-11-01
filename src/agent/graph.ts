@@ -19,6 +19,7 @@ const workflow = new StateGraph(IncidentState)
   .addEdge("correlate_logs", "inspect_codebase")
   .addEdge("inspect_codebase", "diagnose_root_cause")
   .addEdge("diagnose_root_cause", "human_approval_gate")
+  .addEdge("human_approval_gate", "execute_remediation")
   .addEdge("execute_remediation", END);
 
 // Compile with persistence
