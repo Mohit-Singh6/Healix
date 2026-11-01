@@ -24,8 +24,12 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]["id"];
 
-function timeLabel(value: string | null): string {
-  return value ? value.slice(11, 19) : "—";
+function timeLabel(value: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? null
+    : date.toLocaleTimeString("en-GB", { hour12: false, timeZone: "UTC" });
 }
 
 function actionLabel(incident: IncidentData): string {
@@ -107,7 +111,7 @@ export default function IncidentWorkbench({
   const lifecycleSteps = [
     { time: timeLabel(incidentData.timestamp), label: "Ingested", complete: true },
     {
-      time: timeLabel(incidentData.updatedAt),
+      time: null,
       label: incidentData.proposedAction ? "Diagnosed" : "Investigating",
       complete: Boolean(incidentData.proposedAction),
     },
@@ -121,7 +125,7 @@ export default function IncidentWorkbench({
       complete: incidentData.humanApprovalStatus !== "PENDING",
     },
     {
-      time: incidentData.remediationPrUrl ? timeLabel(incidentData.updatedAt) : "—",
+      time: incidentData.remediationPrUrl ? timeLabel(incidentData.updatedAt) : null,
       label: incidentData.remediationPrUrl ? "PR Created" : isResolved ? "Remediated" : "Awaiting Action",
       complete: isResolved,
     },
@@ -134,22 +138,33 @@ export default function IncidentWorkbench({
         War Room
       </Link>
 
-      <ol aria-label="Incident lifecycle" className="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-[#262520] bg-[#181816] px-4 py-3 sm:flex sm:items-center sm:gap-y-3 sm:px-5">
-        {lifecycleSteps.map((step, index) => (
-          <li key={step.label} className="flex min-w-0 flex-1 items-center">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className={`size-2.5 shrink-0 rounded-full border ${step.complete ? "border-emerald-500 bg-emerald-500" : index === 2 && isPending ? "border-[#F59E0B] bg-[#F59E0B]/30" : "border-[#5B5A52] bg-transparent"}`} />
-              <span className="flex min-w-0 flex-col">
-                <time className={`font-mono text-xs ${step.complete ? "text-[#D4D4CE]" : "text-[#8E8E86]"}`}>{step.time}</time>
-                <span className={`text-sm leading-relaxed ${step.complete ? "text-[#D4D4CE]" : index === 2 && isPending ? "text-[#F59E0B]" : "text-[#8E8E86]"}`}>{step.label}</span>
-              </span>
-            </div>
-            {index < lifecycleSteps.length - 1 && (
-              <span aria-hidden="true" className={`mx-3 hidden h-px min-w-4 flex-1 sm:block ${step.complete ? "bg-emerald-800" : "bg-[#383730]"}`} />
-            )}
-          </li>
-        ))}
-      </ol>
+      <div className="mt-6 overflow-x-auto rounded-lg border border-[#262520] bg-[#181816]">
+        <ol aria-label="Incident lifecycle" className="grid min-w-[680px] grid-cols-4 px-4 py-4 sm:px-5">
+          {lifecycleSteps.map((step, index) => (
+            <li key={step.label} className="min-w-0">
+              <div className="flex items-center pr-4">
+                <span className={`size-2.5 shrink-0 rounded-full border ${step.complete ? "border-emerald-500 bg-emerald-500" : index === 2 && isPending ? "border-[#F59E0B] bg-[#F59E0B]/30" : "border-[#5B5A52] bg-transparent"}`} />
+                {index < lifecycleSteps.length - 1 && (
+                  <span aria-hidden="true" className={`h-px flex-1 ${step.complete ? "bg-emerald-800" : "bg-[#383730]"}`} />
+                )}
+              </div>
+              <div className="mt-2 min-h-10 pr-4">
+                <span className="block h-4">
+                  {step.time && (
+                    <time
+                      dateTime={index === 0 ? incidentData.timestamp : index === 2 ? incidentData.decidedAt ?? undefined : incidentData.updatedAt}
+                      className={`font-mono text-xs ${step.complete ? "text-[#D4D4CE]" : "text-[#8E8E86]"}`}
+                    >
+                      {step.time}
+                    </time>
+                  )}
+                </span>
+                <span className={`block text-sm leading-relaxed ${step.complete ? "text-[#D4D4CE]" : index === 2 && isPending ? "text-[#F59E0B]" : "text-[#8E8E86]"}`}>{step.label}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
 
       <header className="mt-6 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div className="min-w-0">
