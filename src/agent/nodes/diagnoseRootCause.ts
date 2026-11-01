@@ -1,17 +1,21 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type {
-  IncidentAgentState,
-  IncidentAgentUpdate,
-  ProposedAction,
-  ActionPayload,
-} from "../state";
+import { ActionPayloadSchema, ProposedActionSchema } from "../state";
+import type { IncidentAgentState, IncidentAgentUpdate } from "../state";
+import { generateGroqJson } from "../groq";
+import { z } from "zod";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const diagnosisOutputSchema = z.object({
+  incidentSeverity: z.enum(["SEV1", "SEV2", "SEV3"]),
+  hypothesis: z.string().min(1),
+  proposedAction: ProposedActionSchema,
+  actionPayload: ActionPayloadSchema,
+});
 
 export async function diagnoseRootCauseNode(
   state: IncidentAgentState
 ): Promise<IncidentAgentUpdate> {
-  console.log(`[Node C: DiagnoseRootCause] Generating root cause analysis with Gemini 2.5 Flash...`);
+  console.log("[Node C: DiagnoseRootCause] Generating root cause analysis with Gemini; Groq is the fallback.");
 
   const formattedCommits =
     state.candidateCommits.length > 0
@@ -46,6 +50,9 @@ ${formattedCommits}
 TASK:
 1. Formulate a concise, clear technical hypothesis explaining the root cause of this incident.
 2. Select an automated remediation action and provide the required actionPayload arguments:
+
+Return one JSON object with exactly these top-level fields:
+{"incidentSeverity":"SEV1|SEV2|SEV3","hypothesis":"...","proposedAction":"REVERT_PR|BUGFIX_PR|APPLY_CONFIG_PATCH|MANUAL_INTERVENTION|NO_ACTION","actionPayload":{}}
 
 ACTION SELECTION GUIDELINES:
 
@@ -82,101 +89,66 @@ ACTION SELECTION GUIDELINES:
    - actionPayload should be empty {}.
 `;
 
+  let parsed: z.infer<typeof diagnosisOutputSchema>;
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            hypothesis: {
-              type: Type.STRING,
-              description: "Clear, technical explanation of the failure mechanism.",
-            },
-            proposedAction: {
-              type: Type.STRING,
-              enum: [
-                "REVERT_PR",
-                "BUGFIX_PR",
-                "APPLY_CONFIG_PATCH",
-                "MANUAL_INTERVENTION",
-                "NO_ACTION",
-              ],
-              description: "The category of recommended remediation action.",
-            },
-            incidentSeverity: {
-              type: Type.STRING,
-              enum: ["SEV1", "SEV2", "SEV3"],
-              description: "The severity level of the incident. SEV1 being the most critical while SEV3 is the least critical.",
-            },
-            actionPayload: {
-              type: Type.OBJECT,
-              description: "Key-value arguments needed to execute the proposed action.",
-              properties: {
-                targetCommitSha: {
-                  type: Type.STRING,
-                  description: "Required for REVERT_PR",
-                },
-                targetFilePath: {
-                  type: Type.STRING,
-                  description: "Required for BUGFIX_PR (e.g. src/app/dashboard.tsx)",
-                },
-                patchMode: {
-                  type: Type.STRING,
-                  enum: ["FULL_FILE", "SEARCH_REPLACE"],
-                  description: "Required for BUGFIX_PR",
-                },
-                patchedFileContent: {
-                  type: Type.STRING,
-                  description: "Required when patchMode is FULL_FILE",
-                },
-                replacements: {
-                  type: Type.ARRAY,
-                  description: "Array of search-and-replace pairs for multi-block edits when patchMode is SEARCH_REPLACE",
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      searchBlock: {
-                        type: Type.STRING,
-                        description: "Exact snippet currently in the file to replace",
+    let responseText: string | null = null;
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              hypothesis: { type: Type.STRING, description: "Clear, technical explanation of the failure mechanism." },
+              proposedAction: {
+                type: Type.STRING,
+                enum: ["REVERT_PR", "BUGFIX_PR", "APPLY_CONFIG_PATCH", "MANUAL_INTERVENTION", "NO_ACTION"],
+                description: "The category of recommended remediation action.",
+              },
+              incidentSeverity: {
+                type: Type.STRING,
+                enum: ["SEV1", "SEV2", "SEV3"],
+                description: "SEV1 is most critical and SEV3 is least critical.",
+              },
+              actionPayload: {
+                type: Type.OBJECT,
+                description: "Key-value arguments needed to execute the proposed action.",
+                properties: {
+                  targetCommitSha: { type: Type.STRING, description: "Required for REVERT_PR" },
+                  targetFilePath: { type: Type.STRING, description: "Required for BUGFIX_PR" },
+                  patchMode: { type: Type.STRING, enum: ["FULL_FILE", "SEARCH_REPLACE"] },
+                  patchedFileContent: { type: Type.STRING, description: "Required for FULL_FILE" },
+                  replacements: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        searchBlock: { type: Type.STRING },
+                        replaceBlock: { type: Type.STRING },
                       },
-                      replaceBlock: {
-                        type: Type.STRING,
-                        description: "Corrected snippet that replaces searchBlock verbatim",
-                      },
+                      required: ["searchBlock", "replaceBlock"],
                     },
-                    required: ["searchBlock", "replaceBlock"],
                   },
-                },
-                configKey: {
-                  type: Type.STRING,
-                  description: "Target key for APPLY_CONFIG_PATCH",
-                },
-                configValue: {
-                  type: Type.STRING,
-                  description: "New value for APPLY_CONFIG_PATCH",
+                  configKey: { type: Type.STRING, description: "Target key for APPLY_CONFIG_PATCH" },
+                  configValue: { type: Type.STRING, description: "New value for APPLY_CONFIG_PATCH" },
                 },
               },
             },
+            required: ["hypothesis", "proposedAction", "incidentSeverity", "actionPayload"],
           },
-          required: ["hypothesis", "proposedAction", "actionPayload"],
         },
-      },
-    });
-
-    const resultText = response.text;
-    if (!resultText) {
-      throw new Error("Empty response received from Gemini.");
+      });
+      responseText = response.text ?? null;
+      if (!responseText) throw new Error("Gemini returned an empty diagnosis.");
+      parsed = diagnosisOutputSchema.parse(JSON.parse(responseText));
+    } catch (geminiError) {
+      console.error("[Node C] Gemini diagnosis failed; trying Groq fallback.", geminiError);
+      responseText = await generateGroqJson(prompt);
+      parsed = diagnosisOutputSchema.parse(JSON.parse(responseText));
+      console.log("[Node C] Diagnosis generated with Groq fallback.");
     }
-
-    const parsed = JSON.parse(resultText) as {
-      incidentSeverity: "SEV1" | "SEV2" | "SEV3";
-      hypothesis: string;
-      proposedAction: ProposedAction;
-      actionPayload: ActionPayload;
-    };
 
     console.log(`[Node C] Diagnosis completed. Proposed action: ${parsed.proposedAction}`);
 
@@ -187,7 +159,7 @@ ACTION SELECTION GUIDELINES:
       actionPayload: parsed.actionPayload || {},
     };
   } catch (error) {
-    console.error(`[Node C] Failed to generate diagnosis:`, error);
+    console.error("[Node C] Gemini and Groq diagnosis both failed.", error);
     return {
       incidentSeverity: "SEV3",
       hypothesis: "Failed to automatically generate hypothesis due to model or parsing error.",
@@ -196,101 +168,3 @@ ACTION SELECTION GUIDELINES:
     };
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-// import type { IncidentAgentState, IncidentAgentUpdate } from "../state";
-// import { GoogleGenAI, Type } from "@google/genai";
-// import * as z from "zod";
-
-// const ai = new GoogleGenAI({});
-
-// const outputSchema = {
-//   type: "object",
-//   properties: {
-//     "hypothesis": { type: "string" },
-//     "proposedAction": { type: "string", enum: ["REVERT_PR", "APPLY_CONFIG_PATCH", "MANUAL_INTERVENTION", "NO_ACTION"] },
-//     "actionPayload": { type: "object" }
-//   },
-//   required: ["hypothesis", "proposedAction", "actionPayload"]
-// };
-
-// const outputSchemaZ = z.fromJSONSchema(outputSchema);
-
-
-// export async function diagnoseRootCauseNode(state: IncidentAgentState): Promise<IncidentAgentUpdate> {
-//   console.log(`[Node C: DiagnoseRootCause] Generating root cause analysis...`);
-
-//     const SYSTEM_PROMPT = `
-//     You are an expert site reliability and software engineer investigating an active production incident.
-
-//     Your task is to analyze the provided incident details, correlated logs, and recent code changes to formulate a concise, clear technical hypothesis explaining the root cause of this incident.
-
-//     Additionally, you should suggest an automated remediation action based on your analysis:
-//     - "REVERT_PR": If a specific recent commit diff directly caused this regression.
-//     - "APPLY_CONFIG_PATCH": If the failure is caused by an environment variable, timeout, or config drift.
-//     - "MANUAL_INTERVENTION": If the fix requires manual architectural changes or data migration.
-//     - "NO_ACTION": If the error appears transient or harmless.
-
-//     Here is are the details for the error that was reported for the service "${state.serviceName}":
-//     stackTrace: "${state.stackTrace}",
-//     errorMessage: "${state.errorMessage}"
-
-//     correlated logs regarding this incident: 
-//     "${state.correlatedLogs}"
-
-//     candidate differences in the github repo that might have caused this error:
-//     "${state.candidateCommits}"
-
-//     - You have to return:
-//         - diagnostic hypothesis explaining the bug that why did it happened in the first place from which code changes, and why did it caused this incident to happen.
-//         -  A suggested mitigation category (REVERT_PR, APPLY_CONFIG_PATCH, or MANUAL_INTERVENTION).
-//         - The payload required for the action (e.g., target commit SHA for revert).
-
-//     You have to return the output in a JSON format with the following structure:
-//     {
-//       "hypothesis": "string",
-//       "proposedAction": "REVERT_PR" | "APPLY_CONFIG_PATCH" | "MANUAL_INTERVENTION" | "NO_ACTION",
-//       "actionPayload": Record<string, unknown>
-//     }
-//     `;
-
-    
-//     try {
-//       const interaction = await ai.interactions.create({
-//         model: "gemini-1.5-flash",
-//         input: SYSTEM_PROMPT,
-//         response_format: {
-//           type: "text",
-//           mime_type: "application/json",
-//           schema: outputSchema
-//         },
-//       });
-  
-//       const op = outputSchemaZ.parse(JSON.parse(interaction.output_text || "{}"));
-//       return {
-//         hypothesis: op.hypothesis,
-//         proposedAction: op.proposedAction as any,
-//         actionPayload: op.actionPayload
-//       }
-
-//     }
-//     catch (error) {
-//       console.error(`[Node C] Failed to generate diagnosis:`, error);
-//       return {
-//         hypothesis: "Failed to automatically generate hypothesis due to model error.",
-//         proposedAction: "MANUAL_INTERVENTION",
-//         actionPayload: { error: String(error) },
-//       };
-//     }
-
-// }
-

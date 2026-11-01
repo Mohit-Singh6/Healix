@@ -1,13 +1,21 @@
 import type { IncidentAgentState, IncidentAgentUpdate } from "../state";
 import { Octokit } from "@octokit/rest";
 import { GoogleGenAI, Type } from "@google/genai";
+import { z } from "zod";
 import { createHmac } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { decryptProjectSecret } from "../../lib/project-secrets";
+import { generateGroqJson } from "../groq";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
+const postMortemOutputSchema = z.object({
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  rootCause: z.string().min(1),
+  mitigationSteps: z.string().min(1),
+  markdownContent: z.string().min(1),
+});
 
 export async function executeRemediationNode(
   state: IncidentAgentState
@@ -421,7 +429,9 @@ export async function executeRemediationNode(
 
     TASK:
     Generate a thorough, production-grade Post-Mortem report.
-    Return JSON matching the schema with:
+    Return only a valid JSON object matching this exact shape:
+    {"title":"...","summary":"...","rootCause":"...","mitigationSteps":"...","markdownContent":"..."}
+    Include these fields:
     - title: A concise incident title.
     - summary: Executive summary highlighting blast radius and service impact.
     - rootCause: Technical failure mechanism.
@@ -429,32 +439,7 @@ export async function executeRemediationNode(
     - markdownContent: The complete formatted markdown report with clear headings (Executive Summary, Timeline, Root Cause, Mitigation, Preventative Recommendations).
   `;
 
-  // 3. Generate a post-mortem without blocking persistence of the operator's decision.
-  let responseText: string | null = null;
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: systemPrompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            summary: { type: Type.STRING },
-            rootCause: { type: Type.STRING },
-            mitigationSteps: { type: Type.STRING },
-            markdownContent: { type: Type.STRING },
-          },
-          required: ["title", "summary", "rootCause", "mitigationSteps", "markdownContent"],
-        },
-      },
-    });
-    responseText = response.text ?? null;
-  } catch (error) {
-    console.error("[Node E] Post-mortem generation failed; using the local report.", error);
-  }
-
+  // 3. Use Groq if Gemini is unavailable or does not return the required JSON.
   let parsed = {
     title: "Incident Post-Mortem Report",
     summary: state.hypothesis.slice(0, 500),
@@ -462,13 +447,36 @@ export async function executeRemediationNode(
     mitigationSteps: mitigationOutcomeSummary,
     markdownContent: `# Incident Post-Mortem: ${state.incidentId}\n\n**Root Cause:**\n${state.hypothesis}\n\n**Mitigation:**\n${mitigationOutcomeSummary}`,
   };
-
   try {
-    if (responseText) {
-      parsed = { ...parsed, ...JSON.parse(responseText) };
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: systemPrompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              summary: { type: Type.STRING },
+              rootCause: { type: Type.STRING },
+              mitigationSteps: { type: Type.STRING },
+              markdownContent: { type: Type.STRING },
+            },
+            required: ["title", "summary", "rootCause", "mitigationSteps", "markdownContent"],
+          },
+        },
+      });
+      if (!response.text) throw new Error("Gemini returned an empty post-mortem.");
+      parsed = postMortemOutputSchema.parse(JSON.parse(response.text));
+    } catch (geminiError) {
+      console.error("[Node E] Gemini post-mortem generation failed; trying Groq fallback.", geminiError);
+      const responseText = await generateGroqJson(systemPrompt);
+      parsed = postMortemOutputSchema.parse(JSON.parse(responseText));
+      console.log("[Node E] Post-mortem generated with Groq fallback.");
     }
-  } catch (err) {
-    console.warn("[Node E] Failed to parse structured JSON from Gemini, using fallback.", err);
+  } catch (error) {
+    console.error("[Node E] Gemini and Groq post-mortem generation failed; using the local report.", error);
   }
 
   // 4. Finalize state in Neon DB
