@@ -15,7 +15,7 @@ const diagnosisOutputSchema = z.object({
 export async function diagnoseRootCauseNode(
   state: IncidentAgentState
 ): Promise<IncidentAgentUpdate> {
-  console.log("[Node C: DiagnoseRootCause] Generating root cause analysis with Gemini; Groq is the fallback.");
+  console.log("[Node C: DiagnoseRootCause] Generating root cause analysis with Gemini; In case of failure, Groq will be used as a fallback.");
 
   const formattedCommits =
     state.candidateCommits.length > 0

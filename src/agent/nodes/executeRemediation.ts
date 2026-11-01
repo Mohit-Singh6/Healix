@@ -70,6 +70,74 @@ export async function executeRemediationNode(
           sha: baseSha,
         });
 
+        // Fetch the commit to revert and its files
+        const { data: culpritCommit } = await octokit.repos.getCommit({
+          owner,
+          repo,
+          ref: targetSha,
+        });
+
+        // For single-file or simple commits, delete new files or restore previous content:
+        for (const file of culpritCommit.files || []) {
+          if (file.status === "added") {
+            // Remove file that was added in culprit commit
+            try {
+              const { data: currentFile } = await octokit.repos.getContent({
+                owner,
+                repo,
+                path: file.filename,
+                ref: branchName,
+              });
+              if (!Array.isArray(currentFile) && currentFile.sha) {
+                await octokit.repos.deleteFile({
+                  owner,
+                  repo,
+                  path: file.filename,
+                  message: `Revert: Remove ${file.filename} (reverting ${targetSha.slice(0, 7)})`,
+                  sha: currentFile.sha,
+                  branch: branchName,
+                });
+              }
+            } catch (err) {
+              console.warn(`Could not delete file ${file.filename}:`, err);
+            }
+          } else if (file.status === "modified" && file.previous_filename || file.filename) {
+            // Fetch the file content from the commit BEFORE the culprit commit
+            const parentSha = culpritCommit.parents[0]?.sha;
+            if (parentSha) {
+              try {
+                const { data: parentContent } = await octokit.repos.getContent({
+                  owner,
+                  repo,
+                  path: file.filename,
+                  ref: parentSha,
+                });
+
+                const { data: currentBranchFile } = await octokit.repos.getContent({
+                  owner,
+                  repo,
+                  path: file.filename,
+                  ref: branchName,
+                });
+
+                if (!Array.isArray(parentContent) && "content" in parentContent && !Array.isArray(currentBranchFile)) {
+                  await octokit.repos.createOrUpdateFileContents({
+                    owner,
+                    repo,
+                    path: file.filename,
+                    message: `Revert: Restore ${file.filename} to state before ${targetSha.slice(0, 7)}`,
+                    content: parentContent.content,
+                    sha: currentBranchFile.sha,
+                    branch: branchName,
+                  });
+                }
+              } catch (err) {
+                console.warn(`Could not restore previous version of ${file.filename}:`, err);
+              }
+            }
+          }
+        }
+
         // Open Pull Request proposing the revert
         const { data: pr } = await octokit.rest.pulls.create({
           owner,
