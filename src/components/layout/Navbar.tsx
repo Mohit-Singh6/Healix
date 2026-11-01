@@ -17,8 +17,8 @@ function Brand() {
   return (
     <Link href="/" aria-label="Healix home" className="shrink-0">
       <div className="flex items-center gap-2">
-        <Image src="/Healix_Logo-clean.png" alt="" width={32} height={32} priority unoptimized className="size-8 object-contain" />
-        <Image src="/Healix_Text_Logo.png" alt="Healix" width={57} height={32} priority unoptimized style={{ width: "auto" }} className="hidden h-8 w-auto object-contain sm:block" />
+        <Image src="/Healix_Logo-clean.png" alt="" width={36} height={36} priority unoptimized className="size-9 object-contain" />
+        <Image src="/Healix_Text_Logo.png" alt="Healix" width={57} height={32} priority unoptimized style={{ width: "auto" }} className="hidden h-9 w-auto object-contain sm:block" />
       </div>
     </Link>
   );
@@ -47,8 +47,8 @@ function OperatorMenu({ user }: { user: NavbarUser }) {
           <Image
             src={user.image}
             alt=""
-            width={32}
-            height={32}
+            width={36}
+            height={36}
             className="size-full object-cover"
           />
         ) : initials}
@@ -116,7 +116,7 @@ export default function Navbar({ user }: { user: NavbarUser | null }) {
             <div className="order-1 flex shrink-0 items-center gap-2 sm:order-none sm:gap-3">
               <Link
                 href="/dashboard#projects"
-                className="inline-flex items-center gap-1.5 rounded-md border border-[#33322C] bg-[#1E1E1B] px-3.5 py-1.5 font-mono text-xs text-[#EDEDE8] transition-all hover:border-[#F59E0B]/50 hover:bg-[#282723]"
+                className="inline-flex items-center gap-1.5 rounded-md border border-[#33322C] bg-[#1E1E1B] px-3.5 py-1.5 font-mono text-sm text-[#EDEDE8] transition-all hover:border-[#F59E0B]/50 hover:bg-[#282723]"
               >
                 <span aria-hidden="true">+</span> Add Project
               </Link>
@@ -125,15 +125,15 @@ export default function Navbar({ user }: { user: NavbarUser | null }) {
           </div>
         ) : pathname === "/auth" ? null : (
           <div className="ml-auto flex items-center gap-5">
-            <Link href="/#architecture" className="font-mono text-xs text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
+            <Link href="/#architecture" className="font-mono text-sm text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
               Docs
             </Link>
-            <Link href="/#contact" className="font-mono text-xs text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
+            <Link href="/#contact" className="font-mono text-sm text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
               Contact Us
             </Link>
             <Link
               href="/auth"
-              className="inline-flex items-center gap-2 rounded-md bg-[#F59E0B] px-4 py-1.5 font-mono text-xs font-medium text-black transition-colors hover:bg-[#D97706]"
+              className="inline-flex items-center gap-2 rounded-md bg-[#F59E0B] px-4 py-1.5 font-mono text-sm font-medium text-black transition-colors hover:bg-[#D97706]"
             >
               Get Started <ArrowRight aria-hidden="true" size={13} />
             </Link>
