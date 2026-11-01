@@ -40,6 +40,9 @@ export type ReplacementItem = z.infer<typeof ReplacementItemSchema>;
 
 export const ActionPayloadSchema = z.object({
   targetCommitSha: z.string().optional(),
+  suspectCommitAuthor: z.string().optional(),
+  suspectCommitMessage: z.string().optional(),
+  suspectCommitDate: z.string().optional(),
   configKey: z.string().optional(),
   configValue: z.string().optional(),
   targetFilePath: z.string().optional(),
@@ -67,6 +70,13 @@ export const HumanApprovalStatusSchema = z.enum([
   "REJECTED",
 ]);
 export type HumanApprovalStatus = z.infer<typeof HumanApprovalStatusSchema>;
+
+export const IncidentSeveritySchema = z.enum([
+  "SEV1",
+  "SEV2",
+  "SEV3",
+]);
+export type IncidentSeverity = z.infer<typeof IncidentSeveritySchema>;
 
 export const HumanDecisionPayloadSchema = z.object({
   status: HumanApprovalStatusSchema,
@@ -108,6 +118,7 @@ export const IncidentState = new StateSchema({
   ),
 
   // --- Node C: Root Cause Diagnostic & Proposed Fix (Gemini) ---
+  incidentSeverity: IncidentSeveritySchema.default("SEV2"),
   hypothesis: z.string().default(""),
   proposedAction: ProposedActionSchema.default("NO_ACTION"),
   actionPayload: ActionPayloadSchema.default({}),

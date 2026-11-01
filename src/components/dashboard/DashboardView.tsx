@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import StatusBadge from "@/src/components/ui/StatusBadge";
+import type { DashboardIncident } from "@/src/components/incidents/incident-data";
 import {
   createProject,
   getProjectWebhookUrl,
@@ -37,42 +38,6 @@ function toProjectRow(project: DashboardProject): ProjectRow {
     uptime: "—",
   };
 }
-
-const incidents = [
-  {
-    id: "INC-4829",
-    severity: "CRITICAL",
-    signature: "TypeError: Cannot read properties of undefined (reading 'currency')",
-    service: "Payment Gateway",
-    volume: "1,284 events",
-    age: "4 min ago",
-    tone: "critical" as const,
-    status: "PENDING_OPERATOR_APPROVAL",
-    target: "src/payments/charge.ts:createCharge",
-  },
-  {
-    id: "INC-4812",
-    severity: "HIGH",
-    signature: "PrismaClientKnownRequestError: Unique constraint failed",
-    service: "Orders API",
-    volume: "342 events",
-    age: "18 min ago",
-    tone: "high" as const,
-    status: "PENDING_OPERATOR_APPROVAL",
-    target: "src/orders/create-order.ts:createOrder",
-  },
-  {
-    id: "INC-4786",
-    severity: "HIGH",
-    signature: "ETIMEDOUT: upstream identity provider",
-    service: "Auth Microservice",
-    volume: "86 events",
-    age: "42 min ago",
-    tone: "high" as const,
-    status: "INVESTIGATING",
-    target: "src/auth/provider-client.ts:introspect",
-  },
-];
 
 function MetricCell({ label, value, detail, highlight = false }: {
   label: string;
@@ -133,7 +98,19 @@ function FormField({
   );
 }
 
-export default function DashboardView({ initialProjects }: { initialProjects: DashboardProject[] }) {
+export default function DashboardView({
+  initialProjects,
+  initialIncidents,
+  resolvedIncidents,
+  pendingApprovals,
+  activeIncidents,
+}: {
+  initialProjects: DashboardProject[];
+  initialIncidents: DashboardIncident[];
+  resolvedIncidents: number;
+  pendingApprovals: number;
+  activeIncidents: number;
+}) {
   const [projects, setProjects] = useState(initialProjects.map(toProjectRow));
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
@@ -238,10 +215,10 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
           value={String(projects.length)}
           detail={`${projects.length} connected to this workspace`}
         />
-        <MetricCell label="Incidents Resolved" value="1,482" detail="94% resolved autonomously via API" />
+        <MetricCell label="Incidents Resolved" value={resolvedIncidents.toLocaleString()} detail="Resolved in your workspace" />
         <MetricCell
           label="Awaiting Operator Gate"
-          value="3"
+          value={pendingApprovals.toLocaleString()}
           detail={
             <Link href="#incidents" className="inline-flex items-center gap-1 text-sm text-[#F59E0B] transition-colors hover:text-[#FDBA32]">
               Inspect Queue <ArrowRight aria-hidden="true" size={14} />
@@ -355,44 +332,50 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
             <h2 className="mt-2 text-xl font-semibold text-[#EDEDE8]">Needs your attention</h2>
           </div>
           <span className="inline-flex items-center gap-2 font-mono text-xs text-[#F59E0B]">
-            <CircleAlert aria-hidden="true" size={15} /> 3 active incidents
+            <CircleAlert aria-hidden="true" size={15} /> {activeIncidents} active incidents
           </span>
         </div>
         <div className="flex flex-col gap-3">
-          {incidents.map((incident) => (
+          {initialIncidents.length === 0 && (
+            <div className="rounded-lg border border-[#232320] bg-[#181816] px-5 py-8 text-center">
+              <p className="font-mono text-sm text-[#D4D4CE]">No incidents recorded</p>
+              <p className="mt-2 text-sm text-[#8E8E86]">Alerts from your registered services will appear here.</p>
+            </div>
+          )}
+          {initialIncidents.map((incident) => (
             <article
               key={incident.id}
               className={`relative overflow-hidden rounded-lg border bg-[#181816] p-4 transition-colors sm:p-5 ${
-                incident.status === "PENDING_OPERATOR_APPROVAL" ? "border-amber-500/40 hover:border-amber-500/70" : "border-[#232320] hover:border-[#383730]"
+                incident.status === "PENDING_APPROVAL" ? "border-amber-500/40 hover:border-amber-500/70" : "border-[#232320] hover:border-[#383730]"
               }`}
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center justify-start gap-2.5">
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <StatusBadge tone={incident.tone}>
+                      <StatusBadge tone={incident.severity === "CRITICAL" ? "critical" : incident.severity === "HIGH" ? "high" : "muted"}>
                         {incident.severity === "CRITICAL" ? <CircleAlert aria-hidden="true" size={14} /> : <ArrowDownRight aria-hidden="true" size={14} />}
                         {incident.severity}
                       </StatusBadge>
-                      <span className="font-mono text-sm font-semibold text-[#EDEDE8]">{incident.id}</span>
+                      <span className="font-mono text-sm font-semibold text-[#EDEDE8]">{incident.displayId}</span>
                     </div>
-                    {incident.status === "PENDING_OPERATOR_APPROVAL" && (
+                    {incident.status === "PENDING_APPROVAL" && (
                       <span className="inline-flex items-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 font-mono text-xs font-medium text-amber-400">
                         Action Required: Awaiting Your Review
                       </span>
                     )}
                   </div>
                   <p className="mt-2 truncate font-mono text-sm leading-relaxed text-[#D4D4CE]" title={incident.signature}>{incident.signature}</p>
-                  <p className="mt-1 font-mono text-xs text-[#8E8E86]">{incident.target}</p>
+                  <p className="mt-1 font-mono text-xs text-[#8E8E86]">{incident.target ?? "Source location unavailable"}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 lg:justify-end">
                   <span className="text-sm text-[#D4D4CE]">{incident.service}</span>
-                  <span className="font-mono text-xs text-[#A1A19A]">{incident.volume}</span>
-                  <span className="font-mono text-xs text-[#8E8E86]">{incident.age}</span>
+                  <span className="font-mono text-xs text-[#A1A19A]">{incident.volume} {incident.volume === 1 ? "event" : "events"}</span>
+                  <time dateTime={incident.createdAt} className="font-mono text-xs text-[#8E8E86]">{incident.age}</time>
                   <Link
                     href={`/incidents/${incident.id}`}
                     className={`inline-flex items-center gap-1 rounded px-3 py-2 font-mono text-xs transition-colors ${
-                      incident.status === "PENDING_OPERATOR_APPROVAL"
+                      incident.status === "PENDING_APPROVAL"
                         ? "bg-[#F59E0B] font-semibold text-black hover:bg-[#D97706]"
                         : "bg-[#1E1E1B] text-[#D4D4CE] hover:bg-[#282723]"
                     }`}

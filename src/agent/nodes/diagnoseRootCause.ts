@@ -106,6 +106,11 @@ ACTION SELECTION GUIDELINES:
               ],
               description: "The category of recommended remediation action.",
             },
+            incidentSeverity: {
+              type: Type.STRING,
+              enum: ["SEV1", "SEV2", "SEV3"],
+              description: "The severity level of the incident. SEV1 being the most critical while SEV3 is the least critical.",
+            },
             actionPayload: {
               type: Type.OBJECT,
               description: "Key-value arguments needed to execute the proposed action.",
@@ -167,6 +172,7 @@ ACTION SELECTION GUIDELINES:
     }
 
     const parsed = JSON.parse(resultText) as {
+      incidentSeverity: "SEV1" | "SEV2" | "SEV3";
       hypothesis: string;
       proposedAction: ProposedAction;
       actionPayload: ActionPayload;
@@ -175,6 +181,7 @@ ACTION SELECTION GUIDELINES:
     console.log(`[Node C] Diagnosis completed. Proposed action: ${parsed.proposedAction}`);
 
     return {
+      incidentSeverity: parsed.incidentSeverity,
       hypothesis: parsed.hypothesis,
       proposedAction: parsed.proposedAction,
       actionPayload: parsed.actionPayload || {},
@@ -182,6 +189,7 @@ ACTION SELECTION GUIDELINES:
   } catch (error) {
     console.error(`[Node C] Failed to generate diagnosis:`, error);
     return {
+      incidentSeverity: "SEV3",
       hypothesis: "Failed to automatically generate hypothesis due to model or parsing error.",
       proposedAction: "MANUAL_INTERVENTION",
       actionPayload: {},

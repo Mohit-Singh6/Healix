@@ -15,6 +15,7 @@ export async function executeRemediationNode(
   console.log(`[Node E: ExecuteRemediation] Processing action: ${state.proposedAction}`);
 
   let prUrl: string | null = null;
+  let remediationError: string | null = null;
 
   // Fetch Project details dynamically from DB for multi-tenancy
   const incidentRecord = await prisma.incident.findUnique({
@@ -22,23 +23,27 @@ export async function executeRemediationNode(
     include: { project: true },
   });
 
-  const project = incidentRecord?.project;
-  const owner = project?.repoOwner || process.env.GITHUB_OWNER || "";
-  const repo = project?.repoName || process.env.GITHUB_REPO || "";
-  const githubToken = project?.githubToken
-    ? decryptProjectSecret(project.githubToken)
-    : process.env.GITHUB_TOKEN;
-  const octokit = new Octokit({ auth: githubToken });
+  if (!incidentRecord?.project) {
+    throw new Error(`Incident ${state.incidentId} does not have a registered project.`);
+  }
+
+  const project = incidentRecord.project;
+  const owner = project.repoOwner;
+  const repo = project.repoName;
+  const githubToken = project.githubToken ? decryptProjectSecret(project.githubToken) : null;
+  const octokit = githubToken ? new Octokit({ auth: githubToken }) : null;
 
   // 1. Automated GitHub Revert Flow
   if (state.humanApprovalStatus === "APPROVED" && state.proposedAction === "REVERT_PR") {
-    const targetSha = state.actionPayload?.targetCommitSha as string;
+    const targetSha = state.actionPayload?.targetCommitSha;
 
-    if (targetSha && owner && repo) {
-      try {
+    try {
+      if (!targetSha) throw new Error("The incident has no target commit to revert.");
+      if (!octokit) throw new Error("A GitHub token is not configured for this project.");
+
         // Fetch default branch
         const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
-        const defaultBranch = project?.defaultBranch || repoData.default_branch;
+        const defaultBranch = project.defaultBranch || repoData.default_branch;
 
         // Get latest commit SHA on the default branch
         const { data: refData } = await octokit.rest.git.getRef({
@@ -69,23 +74,25 @@ export async function executeRemediationNode(
 
         prUrl = pr.html_url;
         console.log(`[Node E] Remediation PR created: ${prUrl}`);
-      } catch (err) {
-        console.error("[Node E] Failed to create GitHub revert PR:", err);
-      }
+    } catch (err) {
+      remediationError = err instanceof Error ? err.message : String(err);
+      console.error("[Node E] Failed to create GitHub revert PR:", err);
     }
   }
   else if (state.humanApprovalStatus === "APPROVED" && state.proposedAction === "BUGFIX_PR") {
     console.log(`[Node E] Processing automated bugfix PR...`);
 
-    const targetFilePath = state.actionPayload?.targetFilePath as string;
+    const targetFilePath = state.actionPayload?.targetFilePath;
     const patchMode = state.actionPayload?.patchMode;
-    const targetSha = state.actionPayload?.targetCommitSha as string | undefined;
+    const targetSha = state.actionPayload?.targetCommitSha;
 
-    if (targetFilePath && owner && repo) {
-      try {
+    try {
+      if (!targetFilePath) throw new Error("The incident has no target source file to patch.");
+      if (!octokit) throw new Error("A GitHub token is not configured for this project.");
+
         // 1. Fetch default branch and latest HEAD SHA
         const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
-        const defaultBranch = project?.defaultBranch || repoData.default_branch;
+        const defaultBranch = project.defaultBranch || repoData.default_branch;
 
         const { data: refData } = await octokit.rest.git.getRef({
           owner,
@@ -123,7 +130,7 @@ export async function executeRemediationNode(
 
         // 4. Compute updated code based on patchMode
         if (patchMode === "FULL_FILE") {
-          patchedContent = state.actionPayload?.patchedFileContent as string;
+          patchedContent = state.actionPayload?.patchedFileContent ?? null;
         } 
         else if (patchMode === "SEARCH_REPLACE") {
           const replacements = state.actionPayload?.replacements;
@@ -185,9 +192,9 @@ export async function executeRemediationNode(
 
         prUrl = pr.html_url;
         console.log(`[Node E] Remediation PR created: ${prUrl}`);
-      } catch (err) {
-        console.error("[Node E] Failed to execute bugfix remediation:", err);
-      }
+    } catch (err) {
+      remediationError = err instanceof Error ? err.message : String(err);
+      console.error("[Node E] Failed to execute bugfix remediation:", err);
     }
   }
   else if (state.humanApprovalStatus === "APPROVED" && state.proposedAction === "APPLY_CONFIG_PATCH") {
@@ -196,17 +203,11 @@ export async function executeRemediationNode(
     const configKey = state.actionPayload?.configKey as string | undefined;
     const configValue = state.actionPayload?.configValue as string | undefined;
 
-    // Fetch the project configuration associated with this incident
-    const incidentRecord = await prisma.incident.findUnique({
-      where: { id: state.incidentId },
-      include: { project: true },
-    });
-
-    const project = incidentRecord?.project;
-    const provider = project?.deploymentProvider || "NONE";
+    const provider = project.deploymentProvider;
 
     if (!configKey || configValue === undefined) {
       const errorMsg = "Configuration patch aborted: Missing 'configKey' or 'configValue' in action payload.";
+      remediationError = errorMsg;
       console.error(`[Node E] ${errorMsg}`);
       state.actionPayload = {
         ...state.actionPayload,
@@ -217,10 +218,10 @@ export async function executeRemediationNode(
       try {
         switch (provider) {
           case "RENDER": {
-            const apiKey = project?.platformApiToken
+            const apiKey = project.platformApiToken
               ? decryptProjectSecret(project.platformApiToken)
-              : process.env.RENDER_API_KEY;
-            const serviceId = project?.platformServiceId || process.env.RENDER_SERVICE_ID;
+              : null;
+            const serviceId = project.platformServiceId;
 
             if (!apiKey || !serviceId) {
               throw new Error("Render credentials missing: platformApiToken or platformServiceId not configured.");
@@ -254,11 +255,11 @@ export async function executeRemediationNode(
           }
 
           case "VERCEL": {
-            const token = project?.platformApiToken
+            const token = project.platformApiToken
               ? decryptProjectSecret(project.platformApiToken)
-              : process.env.VERCEL_API_TOKEN;
-            const projectId = project?.platformServiceId || process.env.VERCEL_PROJECT_ID;
-            const teamId = project?.platformTeamId || process.env.VERCEL_TEAM_ID;
+              : null;
+            const projectId = project.platformServiceId;
+            const teamId = project.platformTeamId;
 
             if (!token || !projectId) {
               throw new Error("Vercel credentials missing: platformApiToken or platformServiceId not configured.");
@@ -350,6 +351,7 @@ export async function executeRemediationNode(
               recommendedValue: configValue,
               operatorActionRequired: `Manually set environment variable: ${configKey}=${configValue} in your hosting platform dashboard.`,
             };
+            remediationError = skipReason;
             break;
           }
         }
@@ -360,6 +362,7 @@ export async function executeRemediationNode(
           patchStatus: "FAILED",
           patchFailureReason: err instanceof Error ? err.message : String(err),
         };
+        remediationError = err instanceof Error ? err.message : String(err);
       }
     }
   }
@@ -426,25 +429,31 @@ export async function executeRemediationNode(
     - markdownContent: The complete formatted markdown report with clear headings (Executive Summary, Timeline, Root Cause, Mitigation, Preventative Recommendations).
   `;
 
-  // 3. Generate Post-Mortem with Gemini
-  const response = await ai.models.generateContent({
-    model: "gemini-1.5-flash",
-    contents: systemPrompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          summary: { type: Type.STRING },
-          rootCause: { type: Type.STRING },
-          mitigationSteps: { type: Type.STRING },
-          markdownContent: { type: Type.STRING },
+  // 3. Generate a post-mortem without blocking persistence of the operator's decision.
+  let responseText: string | null = null;
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: systemPrompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            summary: { type: Type.STRING },
+            rootCause: { type: Type.STRING },
+            mitigationSteps: { type: Type.STRING },
+            markdownContent: { type: Type.STRING },
+          },
+          required: ["title", "summary", "rootCause", "mitigationSteps", "markdownContent"],
         },
-        required: ["title", "summary", "rootCause", "mitigationSteps", "markdownContent"],
       },
-    },
-  });
+    });
+    responseText = response.text ?? null;
+  } catch (error) {
+    console.error("[Node E] Post-mortem generation failed; using the local report.", error);
+  }
 
   let parsed = {
     title: "Incident Post-Mortem Report",
@@ -455,15 +464,21 @@ export async function executeRemediationNode(
   };
 
   try {
-    if (response.text) {
-      parsed = { ...parsed, ...JSON.parse(response.text) };
+    if (responseText) {
+      parsed = { ...parsed, ...JSON.parse(responseText) };
     }
   } catch (err) {
     console.warn("[Node E] Failed to parse structured JSON from Gemini, using fallback.", err);
   }
 
   // 4. Finalize state in Neon DB
-  const finalStatus = state.humanApprovalStatus === "APPROVED" ? "RESOLVED" : "DISMISSED";
+  const remediationSucceeded =
+    (state.proposedAction === "BUGFIX_PR" || state.proposedAction === "REVERT_PR")
+      ? Boolean(prUrl)
+      : state.proposedAction === "APPLY_CONFIG_PATCH" &&
+        (state.actionPayload.patchStatus === "APPLIED" ||
+          state.actionPayload.patchStatus === "FORWARDED_CUSTOM_WEBHOOK");
+  const finalStatus = remediationSucceeded ? "RESOLVED" : "MITIGATING";
 
   const actionPayload = JSON.parse(JSON.stringify(state.actionPayload)) as Prisma.InputJsonValue;
 
@@ -475,6 +490,7 @@ export async function executeRemediationNode(
       remediationPrUrl: prUrl,
       revertPrUrl: prUrl, // Keep populated for backward compatibility
       actionPayload,
+      operatorFeedback: remediationError ?? undefined,
     },
   });
 

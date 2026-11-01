@@ -1,7 +1,8 @@
 import IncidentWorkbench from "@/src/components/incidents/IncidentWorkbench";
-import { getMockIncidentData } from "@/src/components/incidents/incident-data";
 import { auth } from "@/src/auth";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { prisma } from "@/src/lib/prisma";
+import { getUserIncident } from "@/src/lib/incidents";
 
 export default async function IncidentPage({
   params,
@@ -9,9 +10,17 @@ export default async function IncidentPage({
   params: Promise<{ id: string }>;
 }) {
   const session = await auth();
-  if (!session?.user) redirect("/auth");
+  if (!session?.user?.email) redirect("/auth");
 
   const { id } = await params;
-  const incident = getMockIncidentData(id);
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true },
+  });
+  if (!user) redirect("/auth");
+
+  const incident = await getUserIncident(user.id, id);
+  if (!incident) notFound();
+
   return <IncidentWorkbench key={id} incidentId={id} incident={incident} />;
 }

@@ -20,13 +20,19 @@ export interface DeduplicationResult {
 
 async function createNewIncident(params: {
     projectId: string;
+    serviceName: string;
     title: string;
+    errorMessage: string;
+    stackTrace: string;
     severity?: IncidentSeverity;
 }): Promise<string> {
     const incident = await prisma.incident.create({
         data: {
             projectId: params.projectId,
             title: params.title.slice(0, 255), // Guard against excessively long error messages
+            serviceName: params.serviceName,
+            errorMessage: params.errorMessage,
+            stackTrace: params.stackTrace,
             status: "INVESTIGATING",
             severity: params.severity ?? "SEV2",
         },
@@ -64,7 +70,10 @@ export async function deduplicateErrorLog(
     if (!targetIncidentId) {
         targetIncidentId = await createNewIncident({
             projectId: err.projectId,
+            serviceName: err.serviceName,
             title: `[${err.serviceName}] ${err.message}`,
+            errorMessage: err.message,
+            stackTrace: err.stackTrace,
         });
         isNewIncident = true;
     }
