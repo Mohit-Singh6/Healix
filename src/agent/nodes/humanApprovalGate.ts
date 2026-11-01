@@ -32,6 +32,8 @@ export async function humanApprovalGate(
     data: {
       status: "PENDING_APPROVAL",
       rootCause: state.hypothesis,
+      actionPayload: state.actionPayload,
+      proposedAction: state.proposedAction,
     },
   });
 

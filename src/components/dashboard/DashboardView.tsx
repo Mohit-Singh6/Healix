@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -97,7 +97,7 @@ async function copyText(value: string) {
 type DeploymentProvider = "NONE" | "VERCEL" | "RENDER" | "CUSTOM";
 
 const fieldClassName =
-  "w-full rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#2B2A24] focus:ring-0 focus-visible:outline-none";
+  "w-full rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B] focus:ring-0 focus-visible:outline-none";
 
 function FormField({
   label,
@@ -137,6 +137,7 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
   const [projects, setProjects] = useState(initialProjects.map(toProjectRow));
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
+  const copyMessageTimeout = useRef<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [deploymentProvider, setDeploymentProvider] = useState<DeploymentProvider>("NONE");
@@ -155,6 +156,23 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
       document.documentElement.style.overflow = previousDocumentOverflow;
     };
   }, [isAddProjectOpen]);
+
+  useEffect(() => () => {
+    if (copyMessageTimeout.current !== null) {
+      window.clearTimeout(copyMessageTimeout.current);
+    }
+  }, []);
+
+  function showCopyMessage(message: string) {
+    setCopyMessage(message);
+    if (copyMessageTimeout.current !== null) {
+      window.clearTimeout(copyMessageTimeout.current);
+    }
+    copyMessageTimeout.current = window.setTimeout(() => {
+      setCopyMessage("");
+      copyMessageTimeout.current = null;
+    }, 2500);
+  }
 
   async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -185,7 +203,7 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
     try {
       const webhookUrl = await getProjectWebhookUrl(project.id);
       await copyText(new URL(webhookUrl, window.location.origin).toString());
-      setCopyMessage(`${project.name} webhook URL copied.`);
+      showCopyMessage(`${project.name} webhook URL copied.`);
     } catch (error) {
       console.error("Unable to copy the ingestion webhook URL.", error);
       setCopyMessage(error instanceof Error ? error.message : "Could not copy webhook URL.");
@@ -193,7 +211,7 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
   }
 
   function closeProjectDialog() {
-    if (!window.confirm("Close this project setup? Any unsaved changes will be lost.")) return;
+    if (!createdProject && !window.confirm("Close this project setup? Any unsaved changes will be lost.")) return;
 
     setIsAddProjectOpen(false);
     setFormError("");
@@ -437,7 +455,7 @@ export default function DashboardView({ initialProjects }: { initialProjects: Da
                   onClick={async () => {
                     try {
                       await copyText(createdProject.webhookUrl);
-                      setCopyMessage("Webhook URL copied.");
+                      showCopyMessage("Webhook URL copied.");
                     } catch (error) {
                       console.error("Unable to copy the new project webhook URL.", error);
                       setCopyMessage(error instanceof Error ? error.message : "Could not copy webhook URL.");

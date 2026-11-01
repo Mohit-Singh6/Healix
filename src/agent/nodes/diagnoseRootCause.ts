@@ -11,7 +11,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 export async function diagnoseRootCauseNode(
   state: IncidentAgentState
 ): Promise<IncidentAgentUpdate> {
-  console.log(`[Node C: DiagnoseRootCause] Generating root cause analysis with Gemini 1.5 Flash...`);
+  console.log(`[Node C: DiagnoseRootCause] Generating root cause analysis with Gemini 2.5 Flash...`);
 
   const formattedCommits =
     state.candidateCommits.length > 0
@@ -84,7 +84,7 @@ ACTION SELECTION GUIDELINES:
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
