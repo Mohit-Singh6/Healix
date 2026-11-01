@@ -57,6 +57,13 @@ export default function IncidentWorkbench({
   const isResolved = incidentData.status === "RESOLVED";
   const isDismissed = incidentData.status === "DISMISSED";
   const isMitigating = incidentData.status === "MITIGATING";
+  const isManualFollowUp = incidentData.proposedAction === "MANUAL_INTERVENTION";
+  const isNoActionRecommended = incidentData.proposedAction === "NO_ACTION";
+  const isTriageInProgress = incidentData.status === "INVESTIGATING" && !incidentData.proposedAction;
+  const requiresOperatorApproval =
+    incidentData.proposedAction === "REVERT_PR" ||
+    incidentData.proposedAction === "BUGFIX_PR" ||
+    incidentData.proposedAction === "APPLY_CONFIG_PATCH";
   const severityTone = incidentData.severity === "CRITICAL"
     ? "critical"
     : incidentData.severity === "HIGH"
@@ -108,28 +115,59 @@ export default function IncidentWorkbench({
     }
   }
 
+  const diagnosisState = incidentData.proposedAction
+    ? "complete"
+    : isTriageInProgress
+      ? "current"
+      : "upcoming";
+  const reviewState = !requiresOperatorApproval
+    ? (incidentData.proposedAction ? "skipped" : "upcoming")
+    : incidentData.humanApprovalStatus !== "PENDING"
+      ? "complete"
+      : isPending
+        ? "current"
+        : "upcoming";
+  const remediationState = isResolved || isNoActionRecommended
+    ? "complete"
+    : isDismissed
+      ? "skipped"
+      : isMitigating || isManualFollowUp
+        ? "current"
+        : "upcoming";
   const lifecycleSteps = [
-    { time: timeLabel(incidentData.timestamp), label: "Ingested", complete: true },
+    { time: timeLabel(incidentData.timestamp), label: "Ingested", state: "complete" },
     {
       time: null,
-      label: incidentData.proposedAction ? "Diagnosed" : "Investigating",
-      complete: Boolean(incidentData.proposedAction),
+      label: diagnosisState === "current" ? "Diagnosing" : "Diagnosed",
+      state: diagnosisState,
     },
     {
       time: timeLabel(incidentData.decidedAt),
-      label: incidentData.humanApprovalStatus === "APPROVED"
-        ? "Operator Approved"
-        : incidentData.humanApprovalStatus === "REJECTED" && isDismissed
-          ? "Operator Rejected"
-          : "Approval Gate",
-      complete: incidentData.humanApprovalStatus !== "PENDING",
+      label: !requiresOperatorApproval
+        ? incidentData.proposedAction ? "Approval skipped" : "Operator review"
+        : incidentData.humanApprovalStatus === "APPROVED"
+          ? "Operator approved"
+          : incidentData.humanApprovalStatus === "REJECTED"
+            ? "Operator rejected"
+            : "Operator review",
+      state: reviewState,
     },
     {
-      time: incidentData.remediationPrUrl ? timeLabel(incidentData.updatedAt) : null,
-      label: incidentData.remediationPrUrl ? "PR Created" : isResolved ? "Remediated" : "Awaiting Action",
-      complete: isResolved,
+      time: incidentData.remediationPrUrl || isResolved ? timeLabel(incidentData.updatedAt) : null,
+      label: isNoActionRecommended
+        ? "No action needed"
+        : isManualFollowUp
+          ? "Manual follow-up"
+          : isDismissed
+            ? "Remediation stopped"
+            : isResolved
+              ? "Remediation complete"
+              : incidentData.remediationPrUrl
+                ? "PR created"
+                : "Remediation",
+      state: remediationState,
     },
-  ];
+  ] as const;
 
   return (
     <main className="mx-auto w-full max-w-[1600px] flex-1 bg-[#121211] px-5 pb-20 pt-8 text-[#EDEDE8] sm:px-8 lg:px-12">
@@ -141,11 +179,31 @@ export default function IncidentWorkbench({
       <div className="mt-6 overflow-x-auto rounded-lg border border-[#262520] bg-[#181816]">
         <ol aria-label="Incident lifecycle" className="grid min-w-[680px] grid-cols-4 px-4 py-4 sm:px-5">
           {lifecycleSteps.map((step, index) => (
-            <li key={step.label} className="min-w-0">
+            <li key={`${index}-${step.label}`} className="min-w-0" aria-current={step.state === "current" ? "step" : undefined}>
               <div className="flex items-center pr-4">
-                <span className={`size-2.5 shrink-0 rounded-full border ${step.complete ? "border-emerald-500 bg-emerald-500" : index === 2 && isPending ? "border-[#F59E0B] bg-[#F59E0B]/30" : "border-[#5B5A52] bg-transparent"}`} />
+                <span
+                  aria-hidden="true"
+                  className={`relative z-10 size-3 shrink-0 rounded-full border-2 ${
+                    step.state === "complete"
+                      ? "border-emerald-400 bg-emerald-400"
+                      : step.state === "current"
+                        ? "border-[#F59E0B] bg-[#1B1B18] shadow-[0_0_0_3px_#F59E0B22]"
+                        : step.state === "skipped"
+                          ? "border-[#5B5A52] bg-[#292923]"
+                          : "border-[#5B5A52] bg-[#181816]"
+                  }`}
+                />
                 {index < lifecycleSteps.length - 1 && (
-                  <span aria-hidden="true" className={`h-px flex-1 ${step.complete ? "bg-emerald-800" : "bg-[#383730]"}`} />
+                  <span
+                    aria-hidden="true"
+                    className={`h-px flex-1 ${
+                      step.state === "complete"
+                        ? "bg-emerald-800"
+                        : step.state === "current"
+                          ? "bg-[#F59E0B]/50"
+                          : "bg-[#383730]"
+                    }`}
+                  />
                 )}
               </div>
               <div className="mt-2 min-h-10 pr-4">
@@ -153,13 +211,21 @@ export default function IncidentWorkbench({
                   {step.time && (
                     <time
                       dateTime={index === 0 ? incidentData.timestamp : index === 2 ? incidentData.decidedAt ?? undefined : incidentData.updatedAt}
-                      className={`font-mono text-xs ${step.complete ? "text-[#D4D4CE]" : "text-[#8E8E86]"}`}
+                      className={`font-mono text-xs ${step.state === "complete" ? "text-[#D4D4CE]" : "text-[#8E8E86]"}`}
                     >
                       {step.time}
                     </time>
                   )}
                 </span>
-                <span className={`block text-sm leading-relaxed ${step.complete ? "text-[#D4D4CE]" : index === 2 && isPending ? "text-[#F59E0B]" : "text-[#8E8E86]"}`}>{step.label}</span>
+                <span className={`block text-sm leading-relaxed ${
+                  step.state === "complete"
+                    ? "text-[#D4D4CE]"
+                    : step.state === "current"
+                      ? "font-medium text-[#F59E0B]"
+                      : step.state === "skipped"
+                        ? "text-[#77766F]"
+                        : "text-[#8E8E86]"
+                }`}>{step.label}</span>
               </div>
             </li>
           ))}
@@ -196,25 +262,68 @@ export default function IncidentWorkbench({
       <section
         aria-labelledby="approval-heading"
         className={`mt-7 flex flex-col justify-between gap-5 rounded-lg border p-5 transition-colors ${
-          isResolved ? "border-emerald-800/40 bg-emerald-950/20" : isDismissed ? "border-[#383730] bg-[#181816]" : "border-[#D97706]/40 bg-[#1E1C14]"
+          isResolved
+            ? "border-emerald-800/40 bg-emerald-950/20"
+            : isPending || isMitigating
+              ? "border-[#D97706]/40 bg-[#1E1C14]"
+              : "border-[#383730] bg-[#181816]"
         } lg:flex-row lg:items-center`}
       >
         <div className="flex items-start gap-4">
           <span className={`flex size-10 shrink-0 items-center justify-center rounded-md border ${
-            isResolved ? "border-emerald-800/40 bg-emerald-950/40 text-emerald-400" : isDismissed ? "border-[#383730] bg-[#121211] text-[#A1A19A]" : "border-[#D97706]/30 bg-[#F59E0B]/10 text-[#F59E0B]"
+            isResolved
+              ? "border-emerald-800/40 bg-emerald-950/40 text-emerald-400"
+              : isPending || isMitigating
+                ? "border-[#D97706]/30 bg-[#F59E0B]/10 text-[#F59E0B]"
+                : "border-[#383730] bg-[#121211] text-[#A1A19A]"
           }`}>
-            {isResolved ? <Check aria-hidden="true" size={18} /> : isDismissed ? <X aria-hidden="true" size={18} /> : <Pause aria-hidden="true" size={18} />}
+            {isResolved ? <Check aria-hidden="true" size={18} /> : isPending ? <Pause aria-hidden="true" size={18} /> : isDismissed ? <X aria-hidden="true" size={18} /> : <CircleAlert aria-hidden="true" size={18} />}
           </span>
           <div>
-            <p className={`font-mono text-xs tracking-wide ${isResolved ? "text-emerald-400" : isDismissed ? "text-[#A1A19A]" : "text-[#F59E0B]"}`}>
-              {isResolved ? "REMEDIATION COMPLETED" : isDismissed ? "INCIDENT DISMISSED" : isMitigating ? "REMEDIATION IN PROGRESS" : "EXECUTION PAUSED AT NODE D · HUMAN APPROVAL"}
+            <p className={`font-mono text-xs tracking-wide ${
+              isResolved
+                ? "text-emerald-400"
+                : isPending || isMitigating
+                  ? "text-[#F59E0B]"
+                  : "text-[#A1A19A]"
+            }`}>
+              {isResolved
+                ? "REMEDIATION COMPLETED"
+                : isDismissed
+                  ? "OPERATOR DECISION · REJECTED"
+                  : isPending
+                    ? "AWAITING OPERATOR APPROVAL"
+                    : isMitigating
+                      ? "REMEDIATION IN PROGRESS"
+                      : isManualFollowUp
+                        ? "AUTOMATED TRIAGE COMPLETE · HUMAN ACTION NEEDED"
+                        : isNoActionRecommended
+                          ? "AUTOMATED TRIAGE COMPLETE"
+                          : "AUTOMATED TRIAGE IN PROGRESS"}
             </p>
             <h2 id="approval-heading" className="mt-2 text-lg font-semibold text-[#EDEDE8]">
-              {isPending ? "Review the proposed action" : isResolved ? "Approved remediation completed" : isDismissed ? "The proposed action was rejected" : isMitigating ? "The decision was recorded; remediation needs attention" : "Triage is still investigating"}
+              {isPending
+                ? "Review the proposed action"
+                : isResolved
+                  ? "Approved remediation completed"
+                  : isDismissed
+                    ? "The proposed action was rejected"
+                    : isMitigating
+                      ? "The decision was recorded; remediation needs attention"
+                      : isManualFollowUp
+                        ? "Automated triage completed"
+                        : isNoActionRecommended
+                          ? "No automated remediation is needed"
+                          : "Automated triage is investigating"}
             </h2>
             <p className="mt-1 text-sm leading-6 text-[#A1A19A]">
-              {incidentData.actionSummary ?? "Automated triage has not proposed a remediation yet."}
+              {incidentData.actionSummary ?? (isTriageInProgress
+                ? "Healix is correlating logs and investigating the affected service."
+                : "Automated triage has not proposed a remediation yet.")}
             </p>
+            {(isManualFollowUp || isNoActionRecommended) && incidentData.hypothesis !== incidentData.actionSummary && (
+              <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-[#D4D4CE]">{incidentData.hypothesis}</p>
+            )}
             {incidentData.remediationPrUrl && (
               <a
                 href={incidentData.remediationPrUrl}

@@ -62,7 +62,7 @@ async function copyText(value: string) {
 type DeploymentProvider = "NONE" | "VERCEL" | "RENDER" | "CUSTOM";
 
 const fieldClassName =
-  "w-full rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B] focus:ring-0 focus-visible:outline-none";
+  "w-full rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B] focus:ring-0 focus-visible:!outline-none focus-visible:!outline-offset-0";
 
 function FormField({
   label,
