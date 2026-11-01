@@ -3,31 +3,108 @@ import type { IncidentAgentState, IncidentAgentUpdate, CandidateCommit } from ".
 import { prisma } from "../../lib/prisma";
 import { decryptProjectSecret } from "../../lib/project-secrets";
 
-/**
- * Extracts candidate source file paths from a raw stack trace.
- * Matches common patterns: (src/foo.ts:12:34), (/app/src/foo.js:10:5), etc.
- */
+
+// Too much detailed filtering logic here, but the goal is to extract file paths from stack traces while ignoring irrelevant lines and normalizing paths.
+
+// Valid source code extensions to retain
+const VALID_EXTENSIONS = new Set([
+  "js", "jsx", "ts", "tsx", "mjs", "cjs", "vue", "svelte", "py", "go", "rs", "java"
+]);
+
+// Ignored runtime internals, third-party folders, and virtual engines
+const IGNORED_SEGMENTS = [
+  "node_modules",
+  "node:internal",
+  "node:",
+  "<anonymous>",
+  "internal/process",
+  "internal/modules",
+  "next/dist",
+  "@prisma/client",
+  "bullmq",
+  "ioredis",
+  "express/lib",
+];
+
+// Common production deployment root directory prefixes to strip
+const DEPLOYMENT_ROOT_PREFIXES = [
+  // Render / Koyeb / Docker
+  /^\/opt\/render\/project\/src\//,
+  /^\/opt\/render\/project\//,
+  /^\/app\//,
+  /^\/workspace\//,
+  /^\/var\/task\//,         // AWS Lambda / Vercel Serverless
+  /^\/vercel\/path0\//,     // Vercel build output
+  // Windows absolute paths (e.g. D:\Projects\healix\ or C:\Users\...)
+  /^[a-zA-Z]:[\\/](?:[^\\/]+[\\/])*?(?=(?:backend|frontend|src|app|pages|lib|server|client)[\\/])/i,
+  /^[a-zA-Z]:[\\/]/,
+];
+
 export function extractFilesFromStackTrace(stackTrace: string): string[] {
-  const fileRegex = /(?:at\s+(?:.*?\s+\()?)?(\/(?:[^\s()]+|\S+)|[A-Za-z]:\\[^\s()]+|\b[a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)(?::(\d+))(?::(\d+))?\)?/g;
+  if (!stackTrace || typeof stackTrace !== "string") return [];
+
   const matches: string[] = [];
-  let match;
+  const lines = stackTrace.split("\n");
 
-  while ((match = fileRegex.exec(stackTrace)) !== null) {
-    const rawPath = match[1];
+  // Captures file paths inside "at ... (/path/to/file.ts:10:5)" or "at /path/to/file.ts:10:5"
+  // Handles: file:///, webpack-internal:///, plain Unix paths, and Windows drive letters
+  const frameRegex = /(?:at\s+(?:.*?\s+\()?)?(?:file:\/\/+)?(?:webpack-internal:\/\/\/(?:\([a-z-]+\)\/)?)?((?:[a-zA-Z]:[\\/]|[\\/]|[a-zA-Z0-9_.\-]+[\\/])[^\s:?#()]+?\.[a-zA-Z0-9]+)(?::\d+)*(?:\?[^\s:()]+)?\)?/;
 
-    // Ignore node_modules, node internals, and runtime wrappers
-    if (
-      rawPath.includes("node_modules") ||
-      rawPath.startsWith("node:") ||
-      rawPath.includes("internal/")
-    ) {
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Fast bail out on obvious runtime / dependency lines
+    if (IGNORED_SEGMENTS.some((segment) => line.includes(segment))) {
       continue;
     }
 
-    // Normalize relative path (e.g., "backend/server.js" or "src/app/...")
-    const cleanPath = rawPath.replace(/^[a-zA-Z]:\\.*?(backend|frontend|src)/, "$1").replace(/\\/g, "/");
-    if (!matches.includes(cleanPath)) {
-      matches.push(cleanPath);
+    const match = line.match(frameRegex);
+    if (!match || !match[1]) continue;
+
+    let candidatePath = match[1].trim();
+
+    // 1. Remove file:// protocol if present
+    candidatePath = candidatePath.replace(/^file:\/\/+/, "");
+
+    // 2. Normalize Windows backslashes to standard posix forward slashes
+    candidatePath = candidatePath.replace(/\\/g, "/");
+
+    // 3. Remove URL query params / cachebusters (e.g. route.ts?t=1700000)
+    candidatePath = candidatePath.split("?")[0].split("#")[0];
+
+    // 4. Verify extension validity
+    const ext = candidatePath.split(".").pop()?.toLowerCase();
+    if (!ext || !VALID_EXTENSIONS.has(ext)) {
+      continue;
+    }
+
+    // 5. Strip deployment roots and cloud container mount paths
+    for (const prefix of DEPLOYMENT_ROOT_PREFIXES) {
+      if (prefix.test(candidatePath)) {
+        candidatePath = candidatePath.replace(prefix, "");
+        break;
+      }
+    }
+
+    // 6. Anchor to project root if anchored inside known directories
+    // E.g., "/some/deep/nested/path/backend/server.js" -> "backend/server.js"
+    const rootDirMatch = candidatePath.match(/(?:^|\/)((?:backend|frontend|src|app|pages|lib|server|client)\/.*)$/);
+    if (rootDirMatch && rootDirMatch[1]) {
+      candidatePath = rootDirMatch[1];
+    } else {
+      // Clean leading slashes
+      candidatePath = candidatePath.replace(/^\/+/, "");
+    }
+
+    // 7. Ignore if root folder normalization resulted in empty string or standard third-party files
+    if (!candidatePath || candidatePath.includes("node_modules")) {
+      continue;
+    }
+
+    // 8. Deduplicate while preserving stack priority order (top frames first)
+    if (!matches.includes(candidatePath)) {
+      matches.push(candidatePath);
     }
   }
 

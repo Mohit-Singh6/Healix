@@ -57,12 +57,14 @@ Return one JSON object with exactly these top-level fields:
 ACTION SELECTION GUIDELINES:
 
 1. REVERT_PR:
-   - When to choose: A commit from candidateCommits merged within the blast radius introduced breaking regressions, syntax errors, or dependency breakage, and reverting that commit cleanly rolls back the damage.
+   1. BUGFIX_PR (Preferred for isolated runtime exceptions):
+   - When to choose: The crash is an isolated, deterministic runtime exception (e.g., TypeError, "Cannot read properties of null/undefined", missing null-check, or unhandled promise rejection) in an application file (such as server.js or a route handler).
+   - If the error can be remedied by adding an optional chain (?.), null-guard, or removing dead test code, PREFER BUGFIX_PR over REVERT_PR.
    - Required actionPayload fields:
      * targetCommitSha: The full git commit SHA to revert.
 
-2. BUGFIX_PR:
-   - When to choose: The failure is an isolated, single-file bug (e.g., missing optional chaining '?.' or null check, unhandled promise rejection, type error, or off-by-one boundary) and the file is known from the stack trace or candidate commits.
+2. BUGFIX_PR (Preferred for broad regressions):
+   - When to choose: The failure is caused by a multi-file migration, major dependency upgrade, build failure, or architectural change introduced in a recent commit where a simple one-line null-guard is insufficient.
    - You must select one of two patchModes:
      a) patchMode = "SEARCH_REPLACE" (Preferred for targeted fixes or files > 100 lines):
       * targetFilePath: Exact path of the file (e.g., "src/components/dashboard.tsx").
