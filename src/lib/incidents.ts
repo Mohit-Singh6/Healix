@@ -176,6 +176,12 @@ export async function getUserIncident(userId: string, incidentId: string): Promi
       createdAt: true,
       updatedAt: true,
       project: { select: { name: true } },
+      postMortem: {
+        select: {
+          title: true,
+          fullMarkdown: true,
+        },
+      },
       logs: {
         orderBy: { createdAt: "desc" },
         take: 50,
@@ -239,5 +245,6 @@ export async function getUserIncident(userId: string, incidentId: string): Promi
     decidedAt: incident.decidedAt?.toISOString() ?? null,
     remediationPrUrl: incident.remediationPrUrl,
     actionSummary: actionSummary(incident.proposedAction, payload),
+    postMortemMarkdown: incident.postMortem?.fullMarkdown ?? null,
   };
 }

@@ -44,6 +44,7 @@ export interface IncidentData {
   decidedAt: string | null;
   remediationPrUrl: string | null;
   actionSummary: string | null;
+  postMortemMarkdown: string | null;
 }
 
 export interface DashboardIncident {

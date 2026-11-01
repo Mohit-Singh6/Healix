@@ -7,27 +7,31 @@ import { decryptProjectSecret } from "../../lib/project-secrets";
  * Extracts candidate source file paths from a raw stack trace.
  * Matches common patterns: (src/foo.ts:12:34), (/app/src/foo.js:10:5), etc.
  */
-function extractFilesFromStackTrace(stackTrace: string): string[] {
-  const fileRegex = /(?:at\s+.*?\s+\(?|\()([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+):\d+:\d+\)?/g;
-  const files = new Set<string>();
-  let match: RegExpExecArray | null;
+export function extractFilesFromStackTrace(stackTrace: string): string[] {
+  const fileRegex = /(?:at\s+(?:.*?\s+\()?)?(\/(?:[^\s()]+|\S+)|[A-Za-z]:\\[^\s()]+|\b[a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)(?::(\d+))(?::(\d+))?\)?/g;
+  const matches: string[] = [];
+  let match;
 
   while ((match = fileRegex.exec(stackTrace)) !== null) {
-    let rawPath = match[1].replace(/\\/g, "/"); // Normalize Windows backslashes
+    const rawPath = match[1];
 
-    // Filter out node internals, bundles, and vendor packages
+    // Ignore node_modules, node internals, and runtime wrappers
     if (
-      !rawPath.startsWith("node:") &&
-      !rawPath.includes("node_modules") &&
-      !rawPath.includes(".next")
+      rawPath.includes("node_modules") ||
+      rawPath.startsWith("node:") ||
+      rawPath.includes("internal/")
     ) {
-      // Strip common container root prefixes like /app/ or /workspace/
-      rawPath = rawPath.replace(/^\/(?:app|workspace|usr\/src\/app)\//, "");
-      files.add(rawPath);
+      continue;
+    }
+
+    // Normalize relative path (e.g., "backend/server.js" or "src/app/...")
+    const cleanPath = rawPath.replace(/^[a-zA-Z]:\\.*?(backend|frontend|src)/, "$1").replace(/\\/g, "/");
+    if (!matches.includes(cleanPath)) {
+      matches.push(cleanPath);
     }
   }
 
-  return Array.from(files);
+  return matches;
 }
 
 export async function inspectCodebaseNode(

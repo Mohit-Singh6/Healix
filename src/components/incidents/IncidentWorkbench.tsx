@@ -13,6 +13,7 @@ import {
   Pause,
   X,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import StatusBadge from "@/src/components/ui/StatusBadge";
 import type { IncidentData } from "@/src/components/incidents/incident-data";
 
@@ -462,6 +463,7 @@ export default function IncidentWorkbench({
             </div>
           )}
 
+
           <div
             role="tabpanel"
             id={`panel-${activeTab}`}
@@ -521,6 +523,32 @@ export default function IncidentWorkbench({
             )}
           </div>
         </article>
+      </section>
+
+      <section aria-labelledby="postmortem-heading" className="mt-7 overflow-hidden rounded-lg border border-[#262520] bg-[#181816]">
+        <header className="border-b border-[#262520] px-5 py-4 sm:px-6">
+          <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Incident report</p>
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+            <h2 id="postmortem-heading" className="text-lg font-semibold text-[#EDEDE8]">Post-mortem</h2>
+            {incidentData.postMortemMarkdown && (
+              <span className="font-mono text-xs text-emerald-400">REPORT GENERATED</span>
+            )}
+          </div>
+        </header>
+        {incidentData.postMortemMarkdown ? (
+          <article className="max-w-none px-5 py-5 text-sm leading-7 text-[#D4D4CE] sm:px-6 sm:py-6 [&_a]:text-[#F59E0B] [&_a]:underline [&_a]:underline-offset-4 [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[#F59E0B]/50 [&_blockquote]:pl-4 [&_blockquote]:text-[#A1A19A] [&_code]:rounded [&_code]:border [&_code]:border-[#383730] [&_code]:bg-[#121211] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:mb-5 [&_h1]:mt-1 [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:leading-tight [&_h1]:text-[#EDEDE8] [&_h2]:mb-3 [&_h2]:mt-8 [&_h2]:border-b [&_h2]:border-[#2B2A24] [&_h2]:pb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-[#EDEDE8] [&_h3]:mb-2 [&_h3]:mt-6 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-[#EDEDE8] [&_li]:my-1 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-3 [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-[#2B2A24] [&_pre]:bg-[#121211] [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-relaxed [&_pre_code]:border-0 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-semibold [&_strong]:text-[#EDEDE8] [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6">
+            <ReactMarkdown>{incidentData.postMortemMarkdown}</ReactMarkdown>
+          </article>
+        ) : (
+          <div className="px-5 py-6 sm:px-6">
+            <p className="text-sm leading-relaxed text-[#D4D4CE]">
+              The post-mortem will appear here after triage and remediation finish.
+            </p>
+            <p className="mt-2 font-mono text-xs text-[#8E8E86]">
+              Current incident state: {incidentData.status.replaceAll("_", " ")}
+            </p>
+          </div>
+        )}
       </section>
     </main>
   );
