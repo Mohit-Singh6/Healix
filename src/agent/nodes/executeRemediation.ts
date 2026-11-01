@@ -49,107 +49,107 @@ export async function executeRemediationNode(
       if (!targetSha) throw new Error("The incident has no target commit to revert.");
       if (!octokit) throw new Error("A GitHub token is not configured for this project.");
 
-        // Fetch default branch
-        const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
-        const defaultBranch = project.defaultBranch || repoData.default_branch;
+      // Fetch default branch
+      const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
+      const defaultBranch = project.defaultBranch || repoData.default_branch;
 
-        // Get latest commit SHA on the default branch
-        const { data: refData } = await octokit.rest.git.getRef({
-          owner,
-          repo,
-          ref: `heads/${defaultBranch}`,
-        });
-        const baseSha = refData.object.sha;
+      // Get latest commit SHA on the default branch
+      const { data: refData } = await octokit.rest.git.getRef({
+        owner,
+        repo,
+        ref: `heads/${defaultBranch}`,
+      });
+      const baseSha = refData.object.sha;
 
-        // Create a remediation branch off HEAD (it means the revert will be based on the latest state of the default branch)
-        const branchName = `healix/revert-${targetSha.slice(0, 7)}-${Date.now()}`;
-        await octokit.rest.git.createRef({
-          owner,
-          repo,
-          ref: `refs/heads/${branchName}`,
-          sha: baseSha,
-        });
+      // Create a remediation branch off HEAD (it means the revert will be based on the latest state of the default branch)
+      const branchName = `healix/revert-${targetSha.slice(0, 7)}-${Date.now()}`;
+      await octokit.rest.git.createRef({
+        owner,
+        repo,
+        ref: `refs/heads/${branchName}`,
+        sha: baseSha,
+      });
 
-        // Fetch the commit to revert and its files
-        const { data: culpritCommit } = await octokit.repos.getCommit({
-          owner,
-          repo,
-          ref: targetSha,
-        });
+      // Fetch the commit to revert and its files
+      const { data: culpritCommit } = await octokit.repos.getCommit({
+        owner,
+        repo,
+        ref: targetSha,
+      });
 
-        // For single-file or simple commits, delete new files or restore previous content:
-        for (const file of culpritCommit.files || []) {
-          if (file.status === "added") {
-            // Remove file that was added in culprit commit
+      // For single-file or simple commits, delete new files or restore previous content:
+      for (const file of culpritCommit.files || []) {
+        if (file.status === "added") {
+          // Remove file that was added in culprit commit
+          try {
+            const { data: currentFile } = await octokit.repos.getContent({
+              owner,
+              repo,
+              path: file.filename,
+              ref: branchName,
+            });
+            if (!Array.isArray(currentFile) && currentFile.sha) {
+              await octokit.repos.deleteFile({
+                owner,
+                repo,
+                path: file.filename,
+                message: `Revert: Remove ${file.filename} (reverting ${targetSha.slice(0, 7)})`,
+                sha: currentFile.sha,
+                branch: branchName,
+              });
+            }
+          } catch (err) {
+            console.warn(`Could not delete file ${file.filename}:`, err);
+          }
+        } else if (file.status === "modified" && file.previous_filename || file.filename) {
+          // Fetch the file content from the commit BEFORE the culprit commit
+          const parentSha = culpritCommit.parents[0]?.sha;
+          if (parentSha) {
             try {
-              const { data: currentFile } = await octokit.repos.getContent({
+              const { data: parentContent } = await octokit.repos.getContent({
+                owner,
+                repo,
+                path: file.filename,
+                ref: parentSha,
+              });
+
+              const { data: currentBranchFile } = await octokit.repos.getContent({
                 owner,
                 repo,
                 path: file.filename,
                 ref: branchName,
               });
-              if (!Array.isArray(currentFile) && currentFile.sha) {
-                await octokit.repos.deleteFile({
+
+              if (!Array.isArray(parentContent) && "content" in parentContent && !Array.isArray(currentBranchFile)) {
+                await octokit.repos.createOrUpdateFileContents({
                   owner,
                   repo,
                   path: file.filename,
-                  message: `Revert: Remove ${file.filename} (reverting ${targetSha.slice(0, 7)})`,
-                  sha: currentFile.sha,
+                  message: `Revert: Restore ${file.filename} to state before ${targetSha.slice(0, 7)}`,
+                  content: parentContent.content,
+                  sha: currentBranchFile.sha,
                   branch: branchName,
                 });
               }
             } catch (err) {
-              console.warn(`Could not delete file ${file.filename}:`, err);
-            }
-          } else if (file.status === "modified" && file.previous_filename || file.filename) {
-            // Fetch the file content from the commit BEFORE the culprit commit
-            const parentSha = culpritCommit.parents[0]?.sha;
-            if (parentSha) {
-              try {
-                const { data: parentContent } = await octokit.repos.getContent({
-                  owner,
-                  repo,
-                  path: file.filename,
-                  ref: parentSha,
-                });
-
-                const { data: currentBranchFile } = await octokit.repos.getContent({
-                  owner,
-                  repo,
-                  path: file.filename,
-                  ref: branchName,
-                });
-
-                if (!Array.isArray(parentContent) && "content" in parentContent && !Array.isArray(currentBranchFile)) {
-                  await octokit.repos.createOrUpdateFileContents({
-                    owner,
-                    repo,
-                    path: file.filename,
-                    message: `Revert: Restore ${file.filename} to state before ${targetSha.slice(0, 7)}`,
-                    content: parentContent.content,
-                    sha: currentBranchFile.sha,
-                    branch: branchName,
-                  });
-                }
-              } catch (err) {
-                console.warn(`Could not restore previous version of ${file.filename}:`, err);
-              }
+              console.warn(`Could not restore previous version of ${file.filename}:`, err);
             }
           }
         }
+      }
 
-        // Open Pull Request proposing the revert
-        const { data: pr } = await octokit.rest.pulls.create({
-          owner,
-          repo,
-          title: `[Healix Auto-Remediation] Revert culprit commit ${targetSha.slice(0, 7)}`,
-          head: branchName,
-          base: defaultBranch,
-          body: `## Autonomous Incident Remediation\n\n**Triggered by Incident:** \`${state.incidentId}\`\n**Target Culprit Commit:** \`${targetSha}\`\n\n### Root Cause Analysis:\n${state.hypothesis}\n\n*Approved by operator: ${state.humanDecision?.reviewedBy || "operator"}*`,
-        });
+      // Open Pull Request proposing the revert
+      const { data: pr } = await octokit.rest.pulls.create({
+        owner,
+        repo,
+        title: `[Healix Auto-Remediation] Revert culprit commit ${targetSha.slice(0, 7)}`,
+        head: branchName,
+        base: defaultBranch,
+        body: `## Autonomous Incident Remediation\n\n**Triggered by Incident:** \`${state.incidentId}\`\n**Target Culprit Commit:** \`${targetSha}\`\n\n### Root Cause Analysis:\n${state.hypothesis}\n\n*Approved by operator: ${state.humanDecision?.reviewedBy || "operator"}*`,
+      });
 
-        prUrl = pr.html_url;
-        console.log(`[Node E] Remediation PR created: ${prUrl}`);
+      prUrl = pr.html_url;
+      console.log(`[Node E] Remediation PR created: ${prUrl}`);
     } catch (err) {
       remediationError = err instanceof Error ? err.message : String(err);
       console.error("[Node E] Failed to create GitHub revert PR:", err);
@@ -166,108 +166,108 @@ export async function executeRemediationNode(
       if (!targetFilePath) throw new Error("The incident has no target source file to patch.");
       if (!octokit) throw new Error("A GitHub token is not configured for this project.");
 
-        // 1. Fetch default branch and latest HEAD SHA
-        const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
-        const defaultBranch = project.defaultBranch || repoData.default_branch;
+      // 1. Fetch default branch and latest HEAD SHA
+      const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
+      const defaultBranch = project.defaultBranch || repoData.default_branch;
 
-        const { data: refData } = await octokit.rest.git.getRef({
-          owner,
-          repo,
-          ref: `heads/${defaultBranch}`,
-        });
-        const baseSha = refData.object.sha;
+      const { data: refData } = await octokit.rest.git.getRef({
+        owner,
+        repo,
+        ref: `heads/${defaultBranch}`,
+      });
+      const baseSha = refData.object.sha;
 
-        // 2. Create an isolated remediation branch off default branch HEAD
-        const branchIdentifier = targetSha ? targetSha.slice(0, 7) : Date.now().toString().slice(-6);
-        const branchName = `healix/fix-${branchIdentifier}-${Date.now()}`;
-        
-        await octokit.rest.git.createRef({
-          owner,
-          repo,
-          ref: `refs/heads/${branchName}`,
-          sha: baseSha,
-        });
+      // 2. Create an isolated remediation branch off default branch HEAD
+      const branchIdentifier = targetSha ? targetSha.slice(0, 7) : Date.now().toString().slice(-6);
+      const branchName = `healix/fix-${branchIdentifier}-${Date.now()}`;
 
-        // 3. Fetch existing file contents and blob SHA
-        const { data: fileData } = await octokit.rest.repos.getContent({
-          owner,
-          repo,
-          path: targetFilePath,
-          ref: branchName,
-        });
+      await octokit.rest.git.createRef({
+        owner,
+        repo,
+        ref: `refs/heads/${branchName}`,
+        sha: baseSha,
+      });
 
-        if (Array.isArray(fileData) || fileData.type !== "file" || !("content" in fileData)) {
-          throw new Error(`Target path '${targetFilePath}' is not a valid single file.`);
+      // 3. Fetch existing file contents and blob SHA
+      const { data: fileData } = await octokit.rest.repos.getContent({
+        owner,
+        repo,
+        path: targetFilePath,
+        ref: branchName,
+      });
+
+      if (Array.isArray(fileData) || fileData.type !== "file" || !("content" in fileData)) {
+        throw new Error(`Target path '${targetFilePath}' is not a valid single file.`);
+      }
+
+      const currentSha = fileData.sha;
+      const rawContent = Buffer.from(fileData.content, "base64").toString("utf-8");
+      let patchedContent: string | null = null;
+
+      // 4. Compute updated code based on patchMode
+      if (patchMode === "FULL_FILE") {
+        patchedContent = state.actionPayload?.patchedFileContent ?? null;
+      }
+      else if (patchMode === "SEARCH_REPLACE") {
+        const replacements = state.actionPayload?.replacements;
+
+        if (!replacements || !Array.isArray(replacements) || replacements.length === 0) {
+          throw new Error(
+            `[Node E] patchMode is SEARCH_REPLACE, but 'replacements' array is missing or empty.`
+          );
         }
 
-        const currentSha = fileData.sha;
-        const rawContent = Buffer.from(fileData.content, "base64").toString("utf-8");
-        let patchedContent: string | null = null;
+        let updated = rawContent;
 
-        // 4. Compute updated code based on patchMode
-        if (patchMode === "FULL_FILE") {
-          patchedContent = state.actionPayload?.patchedFileContent ?? null;
-        } 
-        else if (patchMode === "SEARCH_REPLACE") {
-          const replacements = state.actionPayload?.replacements;
+        for (let i = 0; i < replacements.length; i++) {
+          const { searchBlock, replaceBlock } = replacements[i];
 
-          if (!replacements || !Array.isArray(replacements) || replacements.length === 0) {
+          if (!searchBlock || typeof replaceBlock !== "string") {
             throw new Error(
-              `[Node E] patchMode is SEARCH_REPLACE, but 'replacements' array is missing or empty.`
+              `[Node E] Invalid replacement entry at index ${i}: searchBlock and replaceBlock must be defined strings.`
             );
           }
 
-          let updated = rawContent;
-
-          for (let i = 0; i < replacements.length; i++) {
-            const { searchBlock, replaceBlock } = replacements[i];
-
-            if (!searchBlock || typeof replaceBlock !== "string") {
-              throw new Error(
-                `[Node E] Invalid replacement entry at index ${i}: searchBlock and replaceBlock must be defined strings.`
-              );
-            }
-
-            if (!updated.includes(searchBlock)) {
-              throw new Error(
-                `[Node E] Replacement block #${i + 1} not found in ${targetFilePath}. Snippet: "${searchBlock.slice(0, 60)}..."`
-              );
-            }
-
-            // Replace the exact matching instance
-            updated = updated.replace(searchBlock, replaceBlock);
+          if (!updated.includes(searchBlock)) {
+            throw new Error(
+              `[Node E] Replacement block #${i + 1} not found in ${targetFilePath}. Snippet: "${searchBlock.slice(0, 60)}..."`
+            );
           }
 
-          patchedContent = updated;
+          // Replace the exact matching instance
+          updated = updated.replace(searchBlock, replaceBlock);
         }
 
-        if (!patchedContent) {
-          throw new Error(`Unable to compute patched content for mode '${patchMode}'.`);
-        }
+        patchedContent = updated;
+      }
 
-        // 5. Commit modified file to the remediation branch
-        await octokit.rest.repos.createOrUpdateFileContents({
-          owner,
-          repo,
-          path: targetFilePath,
-          branch: branchName,
-          message: `fix(healix): apply automated bugfix for ${targetFilePath}`,
-          content: Buffer.from(patchedContent).toString("base64"),
-          sha: currentSha,
-        });
+      if (!patchedContent) {
+        throw new Error(`Unable to compute patched content for mode '${patchMode}'.`);
+      }
 
-        // 6. Open the Pull Request
-        const { data: pr } = await octokit.rest.pulls.create({
-          owner,
-          repo,
-          title: `[Healix Auto-Fix] Resolve issue in ${targetFilePath}`,
-          head: branchName,
-          base: defaultBranch,
-          body: `## Autonomous Bugfix Remediation\n\n**Incident ID:** \`${state.incidentId}\`\n**Target File:** \`${targetFilePath}\`\n\n### Root Cause Analysis:\n${state.hypothesis}\n\n*Approved by operator: ${state.humanDecision?.reviewedBy || "operator"}*`,
-        });
+      // 5. Commit modified file to the remediation branch
+      await octokit.rest.repos.createOrUpdateFileContents({
+        owner,
+        repo,
+        path: targetFilePath,
+        branch: branchName,
+        message: `fix(healix): apply automated bugfix for ${targetFilePath}`,
+        content: Buffer.from(patchedContent).toString("base64"),
+        sha: currentSha,
+      });
 
-        prUrl = pr.html_url;
-        console.log(`[Node E] Remediation PR created: ${prUrl}`);
+      // 6. Open the Pull Request
+      const { data: pr } = await octokit.rest.pulls.create({
+        owner,
+        repo,
+        title: `[Healix Auto-Fix] Resolve issue in ${targetFilePath}`,
+        head: branchName,
+        base: defaultBranch,
+        body: `## Autonomous Bugfix Remediation\n\n**Incident ID:** \`${state.incidentId}\`\n**Target File:** \`${targetFilePath}\`\n\n### Root Cause Analysis:\n${state.hypothesis}\n\n*Approved by operator: ${state.humanDecision?.reviewedBy || "operator"}*`,
+      });
+
+      prUrl = pr.html_url;
+      console.log(`[Node E] Remediation PR created: ${prUrl}`);
     } catch (err) {
       remediationError = err instanceof Error ? err.message : String(err);
       console.error("[Node E] Failed to execute bugfix remediation:", err);
@@ -442,7 +442,7 @@ export async function executeRemediationNode(
       }
     }
   }
-  
+
   // 2. Format Commits and Logs to avoid "[object Object]"
   const formattedCommits = state.candidateCommits.length > 0
     ? state.candidateCommits.map((c) => `SHA: ${c.sha}\nAuthor: ${c.author}\nDiff:\n${c.diff}`).join("\n---\n")
@@ -454,7 +454,9 @@ export async function executeRemediationNode(
 
   let mitigationOutcomeSummary = "Manual intervention required or no action taken.";
 
-  if (state.proposedAction === "BUGFIX_PR" || state.proposedAction === "REVERT_PR") {
+  if (state.humanApprovalStatus === "REJECTED") {
+    mitigationOutcomeSummary = `Proposed remediation (${state.proposedAction}) was rejected by human operator (${state.humanDecision?.reviewedBy || "operator"}). Reason/Feedback: ${state.humanDecision?.feedback || "No reason provided"}.`;
+  } else if (state.proposedAction === "BUGFIX_PR" || state.proposedAction === "REVERT_PR") {
     mitigationOutcomeSummary = prUrl
       ? `Remediation Pull Request successfully created at: ${prUrl}`
       : "Failed to generate remediation Pull Request on GitHub.";
@@ -553,8 +555,8 @@ export async function executeRemediationNode(
     (state.proposedAction === "BUGFIX_PR" || state.proposedAction === "REVERT_PR")
       ? Boolean(prUrl)
       : state.proposedAction === "APPLY_CONFIG_PATCH" &&
-        (state.actionPayload.patchStatus === "APPLIED" ||
-          state.actionPayload.patchStatus === "FORWARDED_CUSTOM_WEBHOOK");
+      (state.actionPayload?.patchStatus === "APPLIED" ||
+        state.actionPayload?.patchStatus === "FORWARDED_CUSTOM_WEBHOOK");
   const finalStatus = remediationSucceeded ? "RESOLVED" : "MITIGATING";
 
   const actionPayload = JSON.parse(JSON.stringify(state.actionPayload)) as Prisma.InputJsonValue;
