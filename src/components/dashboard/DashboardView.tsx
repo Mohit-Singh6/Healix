@@ -49,7 +49,7 @@ function MetricCell({ label, value, detail, highlight = false }: {
     <div className="min-w-0 px-4 py-2 first:pl-0 last:pr-0 sm:px-6">
       <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">{label}</p>
       <p className={`mt-2 font-mono text-2xl ${highlight ? "text-[#F59E0B]" : "text-[#EDEDE8]"}`}>{value}</p>
-      <div className="mt-1 text-sm leading-relaxed text-[#D4D4CE]">{detail}</div>
+      <div className="mt-1 text-base leading-relaxed text-[#D4D4CE]">{detail}</div>
     </div>
   );
 }
@@ -202,7 +202,7 @@ export default function DashboardView({
         <div>
           <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">Workspace / war-room</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[#EDEDE8] sm:text-4xl">War Room</h1>
-          <p className="mt-2 text-sm text-[#A1A19A]">Your services, signals, and response queue at a glance.</p>
+          <p className="mt-2 text-base text-[#A1A19A]">Your services, signals, and response queue at a glance.</p>
         </div>
       </header>
 
@@ -232,7 +232,7 @@ export default function DashboardView({
         <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
             <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Service health / telemetry matrix</p>
-            <h2 className="mt-2 text-xl font-semibold text-[#EDEDE8]">Monitored projects</h2>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-[#EDEDE8]">Monitored projects</h2>
           </div>
           <button
             type="button"
@@ -249,8 +249,8 @@ export default function DashboardView({
           <div className="divide-y divide-[#262520]">
             {projects.length === 0 && (
               <div className="px-5 py-10 text-center">
-                <p className="text-sm text-[#D4D4CE]">No services registered yet.</p>
-                <p className="mt-1 text-sm leading-relaxed text-[#8E8E86]">Connect a GitHub repository to generate its incident-ingestion webhook.</p>
+                <p className="text-base text-[#D4D4CE]">No services registered yet.</p>
+                <p className="mt-1 text-base leading-relaxed text-[#8E8E86]">Connect a GitHub repository to generate its incident-ingestion webhook.</p>
               </div>
             )}
             {projects.map((project) => (
@@ -260,7 +260,7 @@ export default function DashboardView({
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-sm font-semibold text-[#EDEDE8]">{project.name}</h3>
+                    <h3 className="text-base font-semibold text-[#EDEDE8]">{project.name}</h3>
                     <span className="rounded border border-[#2B2A24] bg-[#1E1E1B] px-2 py-0.5 font-mono text-xs text-[#8E8E86]">
                       {project.uptime}
                     </span>
@@ -279,7 +279,7 @@ export default function DashboardView({
                 </div>
                 <div>
                   <p className="mb-1 font-mono text-xs uppercase tracking-wider text-[#8E8E86] xl:hidden">Health</p>
-                  <span className={`inline-flex items-center gap-2 text-sm font-medium ${project.tone === "muted" ? "text-[#A1A19A]" : "text-emerald-400"}`}>
+                  <span className={`inline-flex items-center gap-2 text-base font-medium ${project.tone === "muted" ? "text-[#A1A19A]" : "text-emerald-400"}`}>
                     <span className={`size-2 rounded-full ${project.tone === "muted" ? "bg-[#77766F]" : "bg-emerald-400"}`} />
                     {project.health}
                   </span>
@@ -329,7 +329,7 @@ export default function DashboardView({
         <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
             <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Live incident feed</p>
-            <h2 className="mt-2 text-xl font-semibold text-[#EDEDE8]">Needs your attention</h2>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-[#EDEDE8]">Needs your attention</h2>
           </div>
           <span className="inline-flex items-center gap-2 font-mono text-xs text-[#F59E0B]">
             <CircleAlert aria-hidden="true" size={15} /> {activeIncidents} active incidents
@@ -339,7 +339,7 @@ export default function DashboardView({
           {initialIncidents.length === 0 && (
             <div className="rounded-lg border border-[#232320] bg-[#181816] px-5 py-8 text-center">
               <p className="font-mono text-sm text-[#D4D4CE]">No incidents recorded</p>
-              <p className="mt-2 text-sm text-[#8E8E86]">Alerts from your registered services will appear here.</p>
+              <p className="mt-2 text-base text-[#8E8E86]">Alerts from your registered services will appear here.</p>
             </div>
           )}
           {initialIncidents.map((incident) => (
@@ -366,10 +366,10 @@ export default function DashboardView({
                     )}
                   </div>
                   <p className="mt-2 truncate font-mono text-sm leading-relaxed text-[#D4D4CE]" title={incident.signature}>{incident.signature}</p>
-                  <p className="mt-1 font-mono text-xs text-[#8E8E86]">{incident.target ?? "Source location unavailable"}</p>
+                  <p className="mt-1 font-mono text-sm text-[#8E8E86]">{incident.target ?? "Source location unavailable"}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 lg:justify-end">
-                  <span className="text-sm text-[#D4D4CE]">{incident.service}</span>
+                  <span className="text-base text-[#D4D4CE]">{incident.service}</span>
                   <span className="font-mono text-xs text-[#A1A19A]">{incident.volume} {incident.volume === 1 ? "event" : "events"}</span>
                   <time dateTime={incident.createdAt} className="font-mono text-xs text-[#8E8E86]">{incident.age}</time>
                   <Link

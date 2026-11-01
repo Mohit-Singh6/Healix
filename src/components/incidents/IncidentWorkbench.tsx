@@ -8,14 +8,18 @@ import {
   Check,
   CircleAlert,
   Clipboard,
-  Clock3,
   GitCommitHorizontal,
   Pause,
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import StatusBadge from "@/src/components/ui/StatusBadge";
 import type { IncidentData } from "@/src/components/incidents/incident-data";
+
+type ReportSection = {
+  depth: number;
+  heading: string;
+  markdown: string;
+};
 
 const tabs = [
   { id: "diff", label: "Suspect Diff" },
@@ -39,6 +43,75 @@ function actionLabel(incident: IncidentData): string {
     : "Approve & Open PR";
 }
 
+function parseReportSections(markdown: string): ReportSection[] {
+  const sections: ReportSection[] = [];
+  let current: ReportSection | null = null;
+  const content: string[] = [];
+
+  function saveCurrent() {
+    if (current) {
+      sections.push({ ...current, markdown: content.join("\n").trim() });
+      content.length = 0;
+    }
+  }
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const heading = line.match(/^(#{1,3})\s+(.+?)\s*#*\s*$/);
+    if (heading) {
+      if (!current && content.some((item) => item.trim())) {
+        sections.push({ depth: 2, heading: "", markdown: content.join("\n").trim() });
+        content.length = 0;
+      }
+      saveCurrent();
+      current = { depth: heading[1].length, heading: heading[2], markdown: "" };
+    } else {
+      content.push(line);
+    }
+  }
+
+  saveCurrent();
+  if (!sections.length && content.some((line) => line.trim())) {
+    sections.push({ depth: 2, heading: "", markdown: content.join("\n").trim() });
+  }
+  return sections;
+}
+
+function TimelineMarkdown({ markdown }: { markdown: string }) {
+  const entries = markdown.split(/\r?\n/).filter((line) => line.trim());
+  const timestampPattern =
+    /(?:\*\*)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\s?UTC|Z)?|\d{2}:\d{2}(?::\d{2})?(?:\s?UTC)?)(?:\*\*)?/;
+
+  return (
+    <div className="ml-2 border-l border-[#2B2A24] pl-4">
+      {entries.map((entry, index) => {
+        const timestamp = entry.match(timestampPattern);
+        const description = entry
+          .replace(/^\s*(?:[-*+]|\d+\.)\s*/, "")
+          .replace(timestampPattern, "")
+          .replace(/^[\s:—–-]+/, "");
+
+        if (!timestamp) {
+          return (
+            <div key={`${index}-${entry}`} className="py-2">
+              <ReactMarkdown>{entry}</ReactMarkdown>
+            </div>
+          );
+        }
+
+        return (
+          <div key={`${index}-${entry}`} className="relative flex items-start gap-4 py-2">
+            <span aria-hidden="true" className="absolute -left-[21px] top-3.5 size-2 rounded-full bg-[#3B3A34]" />
+            <span className="shrink-0 pt-0.5 font-mono text-xs text-[#F59E0B]">{timestamp[1]}</span>
+            <div className="min-w-0 text-sm leading-relaxed text-[#D4D4CE] [&_p]:my-0 [&_p+p]:mt-2">
+              <ReactMarkdown>{description}</ReactMarkdown>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function IncidentWorkbench({
   incidentId,
   incident,
@@ -48,6 +121,7 @@ export default function IncidentWorkbench({
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("diff");
   const [copyMessage, setCopyMessage] = useState("");
+  const [postMortemCopyMessage, setPostMortemCopyMessage] = useState("");
   const [incidentData, setIncidentData] = useState(incident);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [decisionError, setDecisionError] = useState("");
@@ -65,11 +139,22 @@ export default function IncidentWorkbench({
     incidentData.proposedAction === "REVERT_PR" ||
     incidentData.proposedAction === "BUGFIX_PR" ||
     incidentData.proposedAction === "APPLY_CONFIG_PATCH";
-  const severityTone = incidentData.severity === "CRITICAL"
-    ? "critical"
+  const reportSections = incidentData.postMortemMarkdown
+    ? parseReportSections(incidentData.postMortemMarkdown)
+    : [];
+  const reportTitle = reportSections.find((section) => section.depth === 1)?.heading ?? "Incident Post-Mortem";
+  const statusTone = isResolved
+    ? "text-emerald-400"
+    : isPending || isMitigating
+      ? "text-[#F59E0B]"
+      : isDismissed
+        ? "text-rose-300"
+        : "text-[#A1A19A]";
+  const severityClass = incidentData.severity === "CRITICAL"
+    ? "text-rose-400"
     : incidentData.severity === "HIGH"
-      ? "high"
-      : "muted";
+      ? "text-[#F59E0B]"
+      : "text-[#A1A19A]";
 
   async function copyThreadId() {
     if (!navigator.clipboard) {
@@ -83,6 +168,21 @@ export default function IncidentWorkbench({
     } catch (error) {
       console.error("Unable to copy the incident ID.", error);
       setCopyMessage("Could not copy the incident ID. Check clipboard permissions and try again.");
+    }
+  }
+
+  async function copyPostMortem() {
+    if (!navigator.clipboard) {
+      setPostMortemCopyMessage("Clipboard access is unavailable in this browser.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(incidentData.postMortemMarkdown ?? "");
+      setPostMortemCopyMessage("Markdown copied.");
+    } catch (error) {
+      console.error("Unable to copy the post-mortem Markdown.", error);
+      setPostMortemCopyMessage("Could not copy Markdown. Check clipboard permissions and try again.");
     }
   }
 
@@ -235,17 +335,24 @@ export default function IncidentWorkbench({
 
       <header className="mt-6 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-xs tracking-wider text-[#8A8A82]">INCIDENT FORENSICS</p>
-            <StatusBadge tone={severityTone}><CircleAlert aria-hidden="true" size={13} /> {incidentData.severity}</StatusBadge>
-            <StatusBadge tone="muted"><Clock3 aria-hidden="true" size={12} /> <time dateTime={incidentData.timestamp}>{incidentData.timestamp.replace("T", " ").replace("Z", " UTC")}</time></StatusBadge>
-            <StatusBadge tone="muted">{incidentData.service}</StatusBadge>
-            <StatusBadge tone={isResolved ? "healthy" : isPending ? "high" : "muted"}>
+          <div className="mb-4 inline-flex max-w-full flex-nowrap items-center overflow-x-auto rounded-md border border-[#2B2A24] bg-[#181816] font-mono text-xs divide-x divide-[#2B2A24]">
+            <span className="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 font-medium text-[#EDEDE8]">
+              <span className="text-[#8E8E86]">SVC:</span> {incidentData.service}
+            </span>
+            <span className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 font-semibold ${severityClass}`}>
+              <span className={`size-1.5 rounded-full ${incidentData.severity === "CRITICAL" ? "bg-rose-500" : incidentData.severity === "HIGH" ? "bg-[#F59E0B]" : "bg-[#77766F]"}`} />
+              {incidentData.severity}
+            </span>
+            <span className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 font-semibold ${statusTone}`}>
+              <span className={`size-1.5 rounded-full ${isResolved ? "bg-emerald-500" : isPending || isMitigating ? "bg-[#F59E0B]" : isDismissed ? "bg-rose-500" : "bg-[#77766F]"}`} />
               {incidentData.status.replaceAll("_", " ")}
-            </StatusBadge>
+            </span>
+            <time dateTime={incidentData.timestamp} className="whitespace-nowrap px-3 py-1.5 text-[#8E8E86]">
+              {incidentData.timestamp.replace("T", " ").replace("Z", " UTC")}
+            </time>
           </div>
           <h1 className="mt-3 font-mono text-3xl font-semibold tracking-tight text-[#EDEDE8] sm:text-4xl">{incidentData.displayId}</h1>
-          <p className="mt-2 text-sm font-medium text-[#D4D4CE]">{incidentData.title}</p>
+          <p className="mt-2 text-base font-medium text-[#D4D4CE]">{incidentData.title}</p>
         </div>
         <div className="flex flex-col items-start gap-1 lg:items-end">
           <button
@@ -317,13 +424,13 @@ export default function IncidentWorkbench({
                           ? "No automated remediation is needed"
                           : "Automated triage is investigating"}
             </h2>
-            <p className="mt-1 text-sm leading-6 text-[#A1A19A]">
+            <p className="mt-1 text-base leading-6 text-[#A1A19A]">
               {incidentData.actionSummary ?? (isTriageInProgress
                 ? "Healix is correlating logs and investigating the affected service."
                 : "Automated triage has not proposed a remediation yet.")}
             </p>
             {(isManualFollowUp || isNoActionRecommended) && incidentData.hypothesis !== incidentData.actionSummary && (
-              <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-[#D4D4CE]">{incidentData.hypothesis}</p>
+              <p className="mt-2 max-w-3xl whitespace-pre-wrap text-base leading-relaxed text-[#D4D4CE]">{incidentData.hypothesis}</p>
             )}
             {incidentData.remediationPrUrl && (
               <a
@@ -336,7 +443,7 @@ export default function IncidentWorkbench({
               </a>
             )}
             {incidentData.operatorFeedback && !isPending && (
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#D4D4CE]">
+              <p className="mt-2 max-w-3xl text-base leading-relaxed text-[#D4D4CE]">
                 <span className="font-mono text-xs uppercase text-[#8E8E86]">Operator / execution note: </span>
                 {incidentData.operatorFeedback}
               </p>
@@ -398,7 +505,7 @@ export default function IncidentWorkbench({
               <h2 className="mt-1 text-base font-semibold text-[#EDEDE8]">Diagnosis &amp; cause</h2>
             </div>
           </div>
-          <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-[#D4D4CE]">{incidentData.hypothesis}</p>
+          <p className="mt-5 whitespace-pre-wrap text-base leading-relaxed text-[#D4D4CE]">{incidentData.hypothesis}</p>
           <div className="mt-5 border-t border-[#262520] pt-4">
             <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Suspect commit</p>
             {incidentData.suspectCommit.hash || incidentData.suspectCommit.file ? (
@@ -408,15 +515,15 @@ export default function IncidentWorkbench({
                   {incidentData.suspectCommit.hash ? `commit ${incidentData.suspectCommit.hash}` : "Suspect source"}
                   {incidentData.suspectCommit.author && ` by ${incidentData.suspectCommit.author}`}
                 </p>
-                <p className="mt-2 text-sm leading-relaxed text-[#A1A19A]">
+                <p className="mt-2 text-base leading-relaxed text-[#A1A19A]">
                   {incidentData.suspectCommit.file ?? "Source file unavailable"}
                   {incidentData.suspectCommit.functionName ? ` · ${incidentData.suspectCommit.functionName}` : ""}
                   {incidentData.suspectCommit.time ? ` · ${incidentData.suspectCommit.time}` : ""}
                 </p>
-                {incidentData.suspectCommit.message && <p className="mt-2 text-sm text-[#8E8E86]">{incidentData.suspectCommit.message}</p>}
+                {incidentData.suspectCommit.message && <p className="mt-2 text-base text-[#8E8E86]">{incidentData.suspectCommit.message}</p>}
               </>
             ) : (
-              <p className="mt-2 text-sm text-[#8E8E86]">No suspect commit has been identified.</p>
+              <p className="mt-2 text-base text-[#8E8E86]">No suspect commit has been identified.</p>
             )}
           </div>
           {incidentData.confidence !== null && (
@@ -472,7 +579,7 @@ export default function IncidentWorkbench({
             className="min-h-[380px] p-4 sm:p-5"
           >
             {activeTab === "diff" && (
-              <div className="min-h-[340px] overflow-x-auto font-mono text-xs leading-relaxed">
+              <div className="min-h-[340px] overflow-x-auto font-mono text-sm leading-relaxed">
                 <p className="mb-4 text-[#8E8E86]">
                   {incidentData.suspectCommit.file
                     ? `@@ proposed change · ${incidentData.suspectCommit.file} @@`
@@ -497,7 +604,7 @@ export default function IncidentWorkbench({
             )}
 
             {activeTab === "logs" && (
-              <div className="max-h-80 overflow-auto font-mono text-xs leading-relaxed">
+              <div className="max-h-80 overflow-auto font-mono text-sm leading-relaxed">
                 {incidentData.logs.length > 0
                   ? incidentData.logs.map((log, index) => {
                     const levelClass = log.includes("ERROR")
@@ -516,7 +623,7 @@ export default function IncidentWorkbench({
                 <summary className="cursor-pointer font-mono text-xs text-[#A1A19A] transition-colors hover:text-[#EDEDE8]">
                   Expand full stack trace
                 </summary>
-                <pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap break-words border-t border-[#262520] pt-4 font-mono text-xs leading-relaxed text-[#D4D4CE]">
+                <pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap break-words border-t border-[#262520] pt-4 font-mono text-sm leading-relaxed text-[#D4D4CE]">
                   <code>{incidentData.rawTrace}</code>
                 </pre>
               </details>
@@ -525,19 +632,50 @@ export default function IncidentWorkbench({
         </article>
       </section>
 
-      <section aria-labelledby="postmortem-heading" className="mt-7 overflow-hidden rounded-lg border border-[#262520] bg-[#181816]">
-        <header className="border-b border-[#262520] px-5 py-4 sm:px-6">
-          <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Incident report</p>
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-            <h2 id="postmortem-heading" className="text-lg font-semibold text-[#EDEDE8]">Post-mortem</h2>
-            {incidentData.postMortemMarkdown && (
-              <span className="font-mono text-xs text-emerald-400">REPORT GENERATED</span>
-            )}
+      <section aria-labelledby="postmortem-heading" className="mt-7 rounded-lg border border-[#262520] bg-[#161614] p-6 shadow-xl sm:p-8 md:p-10">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">EXECUTIVE POST-MORTEM REPORT</p>
+            {incidentData.postMortemMarkdown && <span className="font-mono text-xs text-emerald-400">REPORT GENERATED</span>}
           </div>
+          {incidentData.postMortemMarkdown && (
+            <div className="flex flex-col items-start gap-1 sm:items-end">
+              <button
+                type="button"
+                onClick={() => void copyPostMortem()}
+                className="inline-flex items-center gap-1.5 rounded border border-[#2B2A24] px-3 py-1.5 font-mono text-xs text-[#8E8E86] transition-colors hover:text-[#EDEDE8]"
+              >
+                {postMortemCopyMessage === "Markdown copied." ? <Check aria-hidden="true" size={14} /> : <Clipboard aria-hidden="true" size={14} />}
+                Copy Markdown
+              </button>
+              <p aria-live="polite" className="min-h-4 text-xs text-[#8E8E86]">{postMortemCopyMessage}</p>
+            </div>
+          )}
         </header>
+        <h2 id="postmortem-heading" className="mt-6 text-2xl font-bold leading-tight tracking-tight text-[#EDEDE8] md:text-3xl">
+          {reportTitle}
+        </h2>
         {incidentData.postMortemMarkdown ? (
-          <article className="max-w-none px-5 py-5 text-sm leading-7 text-[#D4D4CE] sm:px-6 sm:py-6 [&_a]:text-[#F59E0B] [&_a]:underline [&_a]:underline-offset-4 [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[#F59E0B]/50 [&_blockquote]:pl-4 [&_blockquote]:text-[#A1A19A] [&_code]:rounded [&_code]:border [&_code]:border-[#383730] [&_code]:bg-[#121211] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:mb-5 [&_h1]:mt-1 [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:leading-tight [&_h1]:text-[#EDEDE8] [&_h2]:mb-3 [&_h2]:mt-8 [&_h2]:border-b [&_h2]:border-[#2B2A24] [&_h2]:pb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-[#EDEDE8] [&_h3]:mb-2 [&_h3]:mt-6 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-[#EDEDE8] [&_li]:my-1 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-3 [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-[#2B2A24] [&_pre]:bg-[#121211] [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-relaxed [&_pre_code]:border-0 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-semibold [&_strong]:text-[#EDEDE8] [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6">
-            <ReactMarkdown>{incidentData.postMortemMarkdown}</ReactMarkdown>
+          <article className="mt-6 max-w-none text-base leading-relaxed text-[#D4D4CE] [&_a]:text-[#F59E0B] [&_a]:underline [&_a]:underline-offset-4 [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[#F59E0B]/50 [&_blockquote]:pl-4 [&_blockquote]:text-[#A1A19A] [&_code]:rounded [&_code]:border [&_code]:border-[#2E2E28] [&_code]:bg-[#1E1E1B] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:mb-6 [&_h1]:mt-1 [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:leading-tight [&_h1]:tracking-tight [&_h1]:text-[#EDEDE8] [&_h2]:mb-4 [&_h2]:mt-8 [&_h2]:border-b [&_h2]:border-[#2B2A24] [&_h2]:pb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-[#EDEDE8] [&_h3]:mb-2 [&_h3]:mt-6 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-[#EDEDE8] [&_li]:my-1 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-3 [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-[#2B2A24] [&_pre]:bg-[#121211] [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-sm [&_pre]:leading-relaxed [&_pre_code]:border-0 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-semibold [&_strong]:text-[#EDEDE8] [&_table]:my-4 [&_table]:w-full [&_td]:border [&_td]:border-[#2B2A24] [&_td]:px-3 [&_td]:py-2 [&_th]:border [&_th]:border-[#2B2A24] [&_th]:bg-[#1B1B18] [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-[#EDEDE8] [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6 md:[&_h1]:text-3xl md:[&_h2]:text-xl">
+            {reportSections.filter((section) => !(section.depth === 1 && section.heading === reportTitle)).map((section, index) => {
+              const isSummary = section.heading.toLowerCase().includes("executive summary");
+              const isTimeline = section.heading.toLowerCase().includes("timeline");
+              const HeadingTag = section.depth === 1 ? "h1" : section.depth === 2 ? "h2" : "h3";
+              return (
+                <section key={`${section.heading}-${index}`}>
+                  {section.heading && <HeadingTag>{section.heading}</HeadingTag>}
+                  {isSummary ? (
+                    <div className="my-4 rounded-r-md border-l-4 border-emerald-500 bg-[#1A1A17] p-5 text-base leading-relaxed text-[#E2E2DC] [&_p]:my-0 [&_p+p]:mt-3">
+                      <ReactMarkdown>{section.markdown}</ReactMarkdown>
+                    </div>
+                  ) : isTimeline ? (
+                    <TimelineMarkdown markdown={section.markdown} />
+                  ) : (
+                    <ReactMarkdown>{section.markdown}</ReactMarkdown>
+                  )}
+                </section>
+              );
+            })}
           </article>
         ) : (
           <div className="px-5 py-6 sm:px-6">

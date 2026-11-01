@@ -442,7 +442,8 @@ export async function executeRemediationNode(
       }
     }
   }
-// 2. Format Commits and Logs to avoid "[object Object]"
+  
+  // 2. Format Commits and Logs to avoid "[object Object]"
   const formattedCommits = state.candidateCommits.length > 0
     ? state.candidateCommits.map((c) => `SHA: ${c.sha}\nAuthor: ${c.author}\nDiff:\n${c.diff}`).join("\n---\n")
     : "No recent candidate commits.";
