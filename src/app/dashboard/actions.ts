@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/src/auth";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/src/lib/prisma";
 import { encryptProjectSecret } from "@/src/lib/project-secrets";
 import { z } from "zod";
@@ -15,8 +16,13 @@ const optionalText = z.preprocess(
   z.string().trim().optional(),
 );
 
-const projectFormSchema = z.object({
-  name: z.string().trim().min(1, "Enter a project name.").max(100),
+const optionalSecret = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().min(1).max(500).optional(),
+);
+
+const serviceFormSchema = z.object({
+  name: z.string().trim().min(1, "Enter a service name.").max(100),
   repoOwner: z.string().trim().min(1, "Enter the repository owner.").max(100).regex(/^[A-Za-z0-9_.-]+$/, "Use a valid GitHub owner name."),
   repoName: z.string().trim().min(1, "Enter the repository name.").max(100).regex(/^[A-Za-z0-9_.-]+$/, "Use a valid GitHub repository name."),
   githubToken: z.string().trim().min(1, "Enter a GitHub personal access token.").max(500),
@@ -42,11 +48,11 @@ const projectFormSchema = z.object({
   }
 });
 
-export type CreateProjectResult =
-  | { success: true; project: DashboardProject; webhookUrl: string }
+export type CreateServiceResult =
+  | { success: true; service: DashboardService; webhookUrl: string }
   | { success: false; error: string };
 
-export type DashboardProject = {
+export type DashboardService = {
   id: string;
   name: string;
   repoOwner: string;
@@ -55,17 +61,21 @@ export type DashboardProject = {
   deployedUrl: string | null;
 };
 
+export type UpdateServiceResult =
+  | { success: true; service: DashboardService }
+  | { success: false; error: string };
+
 function readFormString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value : "";
 }
 
-export async function createProject(formData: FormData): Promise<CreateProjectResult> {
+export async function createService(formData: FormData): Promise<CreateServiceResult> {
   const session = await auth();
   const email = session?.user?.email;
-  if (!email) return { success: false, error: "Sign in again before registering a project." };
+  if (!email) return { success: false, error: "Sign in again before registering a service." };
 
-  const parsed = projectFormSchema.safeParse({
+  const parsed = serviceFormSchema.safeParse({
     name: readFormString(formData, "name"),
     repoOwner: readFormString(formData, "repoOwner"),
     repoName: readFormString(formData, "repoName"),
@@ -80,7 +90,7 @@ export async function createProject(formData: FormData): Promise<CreateProjectRe
   });
 
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? "Check the project details and try again." };
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Check the service details and try again." };
   }
 
   const data = parsed.data;
@@ -94,7 +104,7 @@ export async function createProject(formData: FormData): Promise<CreateProjectRe
       return { success: false, error: "Enter the deployment provider API token." };
     }
 
-    const existingProject = await prisma.project.findFirst({
+    const existingService = await prisma.project.findFirst({
       where: {
         userId: user.id,
         repoOwner: { equals: data.repoOwner, mode: "insensitive" },
@@ -103,12 +113,12 @@ export async function createProject(formData: FormData): Promise<CreateProjectRe
       select: { id: true },
     });
 
-    if (existingProject) {
-      return { success: false, error: "This repository is already registered in your workspace." };
+    if (existingService) {
+      return { success: false, error: "This repository is already registered as a service in your workspace." };
     }
 
     const encryptedPlatformToken = platformApiToken ? encryptProjectSecret(platformApiToken) : null;
-    const project = await prisma.project.create({
+    const service = await prisma.project.create({
       data: {
         name: data.name,
         repoOwner: data.repoOwner,
@@ -135,35 +145,133 @@ export async function createProject(formData: FormData): Promise<CreateProjectRe
         apiKey: true,
       },
     });
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/services");
 
     return {
       success: true,
-      project: {
-        id: project.id,
-        name: project.name,
-        repoOwner: project.repoOwner,
-        repoName: project.repoName,
-        defaultBranch: project.defaultBranch,
-        deployedUrl: project.deployedUrl,
+      service: {
+        id: service.id,
+        name: service.name,
+        repoOwner: service.repoOwner,
+        repoName: service.repoName,
+        defaultBranch: service.defaultBranch,
+        deployedUrl: service.deployedUrl,
       },
-      webhookUrl: `/api/incidents/webhook?apiKey=${encodeURIComponent(project.apiKey)}`,
+      webhookUrl: `/api/incidents/webhook?apiKey=${encodeURIComponent(service.apiKey)}`,
     };
   } catch (error) {
-    console.error("Project registration failed while saving project settings.", error);
-    return { success: false, error: "Project registration failed. Check your details and try again." };
+    console.error("Service registration failed while saving service settings.", error);
+    return { success: false, error: "Service registration failed. Check your details and try again." };
   }
 }
 
-export async function getProjectWebhookUrl(projectId: string): Promise<string> {
+const serviceUpdateSchema = z.object({
+  name: z.string().trim().min(1, "Enter a service name.").max(100),
+  repoOwner: z.string().trim().min(1, "Enter the repository owner.").max(100).regex(/^[A-Za-z0-9_.-]+$/, "Use a valid GitHub owner name."),
+  repoName: z.string().trim().min(1, "Enter the repository name.").max(100).regex(/^[A-Za-z0-9_.-]+$/, "Use a valid GitHub repository name."),
+  defaultBranch: z.string().trim().min(1, "Enter a default branch.").max(255),
+  deployedUrl: optionalUrl,
+  githubToken: optionalSecret,
+});
+
+export async function updateService(serviceId: string, formData: FormData): Promise<UpdateServiceResult> {
+  const email = (await auth())?.user?.email;
+  if (!email) return { success: false, error: "Sign in again before editing a service." };
+
+  const parsed = serviceUpdateSchema.safeParse({
+    name: readFormString(formData, "name"),
+    repoOwner: readFormString(formData, "repoOwner"),
+    repoName: readFormString(formData, "repoName"),
+    defaultBranch: readFormString(formData, "defaultBranch"),
+    deployedUrl: readFormString(formData, "deployedUrl"),
+    githubToken: readFormString(formData, "githubToken"),
+  });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Check the service details and try again." };
+  }
+
+  try {
+    const existingService = await prisma.project.findFirst({
+      where: { id: serviceId, user: { email } },
+      select: { id: true, repoOwner: true, repoName: true },
+    });
+    if (!existingService) return { success: false, error: "Service not found in your workspace." };
+
+    const repositoryChanged =
+      existingService.repoOwner.toLowerCase() !== parsed.data.repoOwner.toLowerCase() ||
+      existingService.repoName.toLowerCase() !== parsed.data.repoName.toLowerCase();
+    if (repositoryChanged && !parsed.data.githubToken) {
+      return { success: false, error: "Provide a GitHub access token when changing the connected repository." };
+    }
+
+    const duplicateRepository = await prisma.project.findFirst({
+      where: {
+        id: { not: serviceId },
+        user: { email },
+        repoOwner: { equals: parsed.data.repoOwner, mode: "insensitive" },
+        repoName: { equals: parsed.data.repoName, mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (duplicateRepository) {
+      return { success: false, error: "This repository is already registered as another service." };
+    }
+
+    const service = await prisma.project.update({
+      where: { id: serviceId },
+      data: {
+        ...parsed.data,
+        deployedUrl: parsed.data.deployedUrl ?? null,
+        githubToken: parsed.data.githubToken ? encryptProjectSecret(parsed.data.githubToken) : undefined,
+      },
+      select: {
+        id: true,
+        name: true,
+        repoOwner: true,
+        repoName: true,
+        defaultBranch: true,
+        deployedUrl: true,
+      },
+    });
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/services");
+    return { success: true, service };
+  } catch (error) {
+    console.error(`Service ${serviceId} could not be updated.`, error);
+    return { success: false, error: "Unable to update this service. Please try again." };
+  }
+}
+
+export async function deleteService(serviceId: string): Promise<{ success: true } | { success: false; error: string }> {
+  const email = (await auth())?.user?.email;
+  if (!email) return { success: false, error: "Sign in again before deleting a service." };
+
+  try {
+    const result = await prisma.project.deleteMany({
+      where: { id: serviceId, user: { email } },
+    });
+    if (result.count !== 1) return { success: false, error: "Service not found in your workspace." };
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/services");
+    revalidatePath("/dashboard/incidents");
+    return { success: true };
+  } catch (error) {
+    console.error(`Service ${serviceId} could not be deleted.`, error);
+    return { success: false, error: "Unable to delete this service. Please try again." };
+  }
+}
+
+export async function getServiceWebhookUrl(serviceId: string): Promise<string> {
   const session = await auth();
   const email = session?.user?.email;
-  if (!email) throw new Error("Sign in again before copying a project webhook URL.");
+  if (!email) throw new Error("Sign in again before copying a service webhook URL.");
 
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, user: { email } },
+  const service = await prisma.project.findFirst({
+    where: { id: serviceId, user: { email } },
     select: { apiKey: true },
   });
-  if (!project) throw new Error("Project not found in your workspace.");
+  if (!service) throw new Error("Service not found in your workspace.");
 
-  return `/api/incidents/webhook?apiKey=${encodeURIComponent(project.apiKey)}`;
+  return `/api/incidents/webhook?apiKey=${encodeURIComponent(service.apiKey)}`;
 }

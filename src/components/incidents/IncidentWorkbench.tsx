@@ -281,9 +281,9 @@ export default function IncidentWorkbench({
 
   return (
     <main className="mx-auto w-full max-w-[1600px] flex-1 bg-[#121211] px-5 pb-20 pt-8 text-[#EDEDE8] sm:px-8 lg:px-12">
-      <Link href="/dashboard" className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#2B2A24] bg-[#181816] px-3 font-mono text-sm text-[#A1A19A] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8]">
+      <Link href="/dashboard/incidents" className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#2B2A24] bg-[#181816] px-3 font-mono text-sm text-[#A1A19A] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8]">
         <ArrowLeft aria-hidden="true" size={17} />
-        War Room
+        Incidents
       </Link>
 
       <div className="mt-6 overflow-x-auto rounded-lg border border-[#262520] bg-[#181816]">
