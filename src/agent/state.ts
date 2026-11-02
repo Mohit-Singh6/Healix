@@ -4,15 +4,32 @@ import { z } from "zod";
 // 1. Zod Domain Schemas & Inferred Types
 
 
+export interface CandidateCommitMeta {
+  sha: string;
+  author: string;
+  message: string;
+  date: string;
+  filesChanged: string[];
+  diff?: string;
+}
+
 export const CandidateCommitSchema = z.object({
   sha: z.string(),
-  diff: z.string(),
   message: z.string(),
-  author: z.string().optional(),
-  date: z.string().optional(),
+  author: z.string().default(""),
+  date: z.string().default(""),
   filesChanged: z.array(z.string()),
+  diff: z.string().optional(),
 });
-export type CandidateCommit = z.infer<typeof CandidateCommitSchema>;
+
+export interface InspectedFile {
+  path: string;
+  content: string;
+}
+export const InspectedFileSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+});
 
 export const ProposedActionSchema = z.enum([
   "REVERT_PR",
@@ -101,6 +118,7 @@ export const IncidentState = new StateSchema({
   serviceName: z.string(),
   stackTrace: z.string(),
   errorMessage: z.string(),
+  endpoint: z.string().optional(),
 
   // --- Node A: Log Correlator ---
   // ReducedValue with an empty array default so nodes can safely append/read logs.
@@ -109,13 +127,15 @@ export const IncidentState = new StateSchema({
   }),
 
   // --- Node B: Codebase Inspector (GitHub Octokit) ---
-  // Commits matching stack frames found in the last 24h.
   candidateCommits: new ReducedValue(
     z.array(CandidateCommitSchema).default(() => []),
     {
       reducer: (_current, update) => update,
     }
   ),
+  inspectedFiles: new ReducedValue(z.array(InspectedFileSchema).default(() => []), {
+    reducer: (_current, update) => update,
+  }),
 
   // --- Node C: Root Cause Diagnostic & Proposed Fix (Gemini) ---
   incidentSeverity: IncidentSeveritySchema.default("SEV2"),

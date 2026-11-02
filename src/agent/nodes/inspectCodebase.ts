@@ -1,219 +1,209 @@
 import { Octokit } from "@octokit/rest";
-import type { IncidentAgentState, IncidentAgentUpdate, CandidateCommit } from "../state";
+import type { IncidentAgentState, IncidentAgentUpdate, CandidateCommitMeta } from "../state";
+import { fastClassifySuspectFiles } from "../groq";
 import { prisma } from "../../lib/prisma";
 import { decryptProjectSecret } from "../../lib/project-secrets";
 
-
-// Too much detailed filtering logic here, but the goal is to extract file paths from stack traces while ignoring irrelevant lines and normalizing paths.
-
-// Valid source code extensions to retain
-const VALID_EXTENSIONS = new Set([
-  "js", "jsx", "ts", "tsx", "mjs", "cjs", "vue", "svelte", "py", "go", "rs", "java"
+const SOURCE_EXTENSIONS = new Set([
+  "js", "jsx", "ts", "tsx", "mjs", "cjs", "vue", "svelte", "py", "go", "rs", "java",
 ]);
+const MAX_INSPECTED_FILES = 5;
+const MAX_FILE_LINES = 400;
 
-// Ignored runtime internals, third-party folders, and virtual engines
-const IGNORED_SEGMENTS = [
-  "node_modules",
-  "node:internal",
-  "node:",
-  "<anonymous>",
-  "internal/process",
-  "internal/modules",
-  "next/dist",
-  "@prisma/client",
-  "bullmq",
-  "ioredis",
-  "express/lib",
-];
-
-// Common production deployment root directory prefixes to strip
-const DEPLOYMENT_ROOT_PREFIXES = [
-  // Render / Koyeb / Docker
-  /^\/opt\/render\/project\/src\//,
-  /^\/opt\/render\/project\//,
-  /^\/app\//,
-  /^\/workspace\//,
-  /^\/var\/task\//,         // AWS Lambda / Vercel Serverless
-  /^\/vercel\/path0\//,     // Vercel build output
-  // Windows absolute paths (e.g. D:\Projects\healix\ or C:\Users\...)
-  /^[a-zA-Z]:[\\/](?:[^\\/]+[\\/])*?(?=(?:backend|frontend|src|app|pages|lib|server|client)[\\/])/i,
-  /^[a-zA-Z]:[\\/]/,
-];
-
-export function extractFilesFromStackTrace(stackTrace: string): string[] {
-  if (!stackTrace || typeof stackTrace !== "string") return [];
-
-  const matches: string[] = [];
-  const lines = stackTrace.split("\n");
-
-  // Captures file paths inside "at ... (/path/to/file.ts:10:5)" or "at /path/to/file.ts:10:5"
-  // Handles: file:///, webpack-internal:///, plain Unix paths, and Windows drive letters
-  const frameRegex = /(?:at\s+(?:.*?\s+\()?)?(?:file:\/\/+)?(?:webpack-internal:\/\/\/(?:\([a-z-]+\)\/)?)?((?:[a-zA-Z]:[\\/]|[\\/]|[a-zA-Z0-9_.\-]+[\\/])[^\s:?#()]+?\.[a-zA-Z0-9]+)(?::\d+)*(?:\?[^\s:()]+)?\)?/;
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) continue;
-
-    // Fast bail out on obvious runtime / dependency lines
-    if (IGNORED_SEGMENTS.some((segment) => line.includes(segment))) {
-      continue;
-    }
-
-    const match = line.match(frameRegex);
-    if (!match || !match[1]) continue;
-
-    let candidatePath = match[1].trim();
-
-    // 1. Remove file:// protocol if present
-    candidatePath = candidatePath.replace(/^file:\/\/+/, "");
-
-    // 2. Normalize Windows backslashes to standard posix forward slashes
-    candidatePath = candidatePath.replace(/\\/g, "/");
-
-    // 3. Remove URL query params / cachebusters (e.g. route.ts?t=1700000)
-    candidatePath = candidatePath.split("?")[0].split("#")[0];
-
-    // 4. Verify extension validity
-    const ext = candidatePath.split(".").pop()?.toLowerCase();
-    if (!ext || !VALID_EXTENSIONS.has(ext)) {
-      continue;
-    }
-
-    // 5. Strip deployment roots and cloud container mount paths
-    for (const prefix of DEPLOYMENT_ROOT_PREFIXES) {
-      if (prefix.test(candidatePath)) {
-        candidatePath = candidatePath.replace(prefix, "");
-        break;
-      }
-    }
-
-    // 6. Anchor to project root if anchored inside known directories
-    // E.g., "/some/deep/nested/path/backend/server.js" -> "backend/server.js"
-    const rootDirMatch = candidatePath.match(/(?:^|\/)((?:backend|frontend|src|app|pages|lib|server|client)\/.*)$/);
-    if (rootDirMatch && rootDirMatch[1]) {
-      candidatePath = rootDirMatch[1];
-    } else {
-      // Clean leading slashes
-      candidatePath = candidatePath.replace(/^\/+/, "");
-    }
-
-    // 7. Ignore if root folder normalization resulted in empty string or standard third-party files
-    if (!candidatePath || candidatePath.includes("node_modules")) {
-      continue;
-    }
-
-    // 8. Deduplicate while preserving stack priority order (top frames first)
-    if (!matches.includes(candidatePath)) {
-      matches.push(candidatePath);
-    }
+function isSourceFile(path: string): boolean {
+  const normalizedPath = path.replace(/\\/g, "/").toLowerCase();
+  const fileName = normalizedPath.split("/").pop() ?? normalizedPath;
+  if (
+    normalizedPath.includes("/.github/") ||
+    normalizedPath.startsWith(".github/") ||
+    fileName.startsWith(".env") ||
+    fileName === "dockerfile" ||
+    fileName === ".gitignore" ||
+    fileName === ".dockerignore" ||
+    fileName === "package-lock.json" ||
+    fileName === "pnpm-lock.yaml" ||
+    fileName === "yarn.lock" ||
+    fileName === "bun.lockb"
+  ) {
+    return false;
   }
 
-  return matches;
+  const extension = fileName.split(".").pop();
+  return extension !== undefined && SOURCE_EXTENSIONS.has(extension);
+}
+
+function stackTraceMatchesFile(stackTrace: string, filePath: string): boolean {
+  if (/\.min\.[^/]+$/i.test(filePath)) return false;
+  const normalizedTrace = stackTrace.replace(/\\/g, "/").toLowerCase();
+  return normalizedTrace.includes(filePath.replace(/\\/g, "/").toLowerCase());
+}
+
+function endpointMatchScore(endpoint: string | undefined, filePath: string): number {
+  if (!endpoint) return 0;
+
+  let pathname = endpoint;
+  try {
+    pathname = new URL(endpoint, "https://healix.invalid").pathname;
+  } catch {
+    pathname = endpoint.split("?")[0];
+  }
+
+  const routeSegments = pathname
+    .split("/")
+    .filter((segment) => segment.length > 1 && !/^api$/i.test(segment))
+    .map((segment) => segment.toLowerCase());
+  const fileSegments = filePath.replace(/\\/g, "/").toLowerCase().split("/");
+  return routeSegments.filter((segment) =>
+    fileSegments.some((fileSegment) => fileSegment.replace(/\.[^.]+$/, "") === segment),
+  ).length;
+}
+
+function selectSuspectFiles(
+  candidateFiles: string[],
+  state: IncidentAgentState,
+): Promise<string[]> {
+  if (candidateFiles.length <= MAX_INSPECTED_FILES) return Promise.resolve(candidateFiles);
+
+  const stackMatches = candidateFiles.filter((filePath) =>
+    stackTraceMatchesFile(state.stackTrace, filePath),
+  );
+  const routeMatches = candidateFiles
+    .map((filePath) => ({ filePath, score: endpointMatchScore(state.endpoint, filePath) }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .map((candidate) => candidate.filePath);
+  const prioritizedFiles = [...new Set([...stackMatches, ...routeMatches])].slice(0, MAX_INSPECTED_FILES);
+  const remainingFiles = candidateFiles.filter((filePath) => !prioritizedFiles.includes(filePath));
+  const availableSlots = MAX_INSPECTED_FILES - prioritizedFiles.length;
+
+  return fastClassifySuspectFiles({
+    errorMessage: state.errorMessage,
+    endpoint: state.endpoint,
+    stackTrace: state.stackTrace,
+    candidateFiles: remainingFiles,
+  }).then((classifiedFiles) =>
+    [...prioritizedFiles, ...classifiedFiles.slice(0, availableSlots)].slice(0, MAX_INSPECTED_FILES),
+  );
+}
+
+function decodeFileContent(encodedContent: string): string {
+  return Buffer.from(encodedContent.replace(/\s/g, ""), "base64").toString("utf8");
+}
+
+function applyLineBudget(content: string, filePath: string): string {
+  const lines = content.split(/\r?\n/);
+  if (lines.length <= MAX_FILE_LINES) return content;
+
+  console.warn(`[Node B] Truncating ${filePath} to ${MAX_FILE_LINES} lines for diagnosis context.`);
+  return `${lines.slice(0, MAX_FILE_LINES).join("\n")}\n// [Content truncated by Healix ingestor due to length]`;
 }
 
 export async function inspectCodebaseNode(
-  state: IncidentAgentState
+  state: IncidentAgentState,
 ): Promise<IncidentAgentUpdate> {
-  console.log(`[Node B: InspectCodebase] Analyzing stack trace for changed files...`);
+  console.log("[Node B: InspectCodebase] Building the recent-commit blast radius...");
 
   const incident = await prisma.incident.findUnique({
     where: { id: state.incidentId },
     include: { project: true },
   });
-
-  const owner = incident?.project?.repoOwner;
-  const repo = incident?.project?.repoName;
-  const token = incident?.project?.githubToken
-    ? decryptProjectSecret(incident.project.githubToken)
-    : process.env.GITHUB_TOKEN;
-
-  if (!token || !owner || !repo) {
-    console.warn(`[Node B] GitHub credentials not fully configured. Skipping git inspection.`);
-    return { candidateCommits: [] };
+  if (!incident?.project) {
+    throw new Error(`[Node B] Cannot inspect code: project for incident ${state.incidentId} was not found.`);
   }
 
+  const project = incident.project;
+  if (!project.githubToken) {
+    throw new Error(`[Node B] Cannot inspect code for project ${project.name}: no GitHub token is configured.`);
+  }
+
+  const token = decryptProjectSecret(project.githubToken);
+  const { repoOwner: owner, repoName: repo } = project;
   const octokit = new Octokit({ auth: token });
-  const impactedFiles = extractFilesFromStackTrace(state.stackTrace || "");
-  console.log(`[Node B] Extracted files from stack trace:`, impactedFiles);
+  let defaultBranch = project.defaultBranch;
+  if (!defaultBranch) {
+    const { data: repository } = await octokit.rest.repos.get({ owner, repo });
+    defaultBranch = repository.default_branch;
+  }
 
-  // Default search range: last 24 hours
-  const sinceDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: recentCommits } = await octokit.rest.repos.listCommits({
+    owner,
+    repo,
+    sha: defaultBranch,
+    per_page: 6,
+  });
+  const commitDetails = await Promise.all(
+    recentCommits.map(async (commit) => {
+      try {
+        const { data } = await octokit.rest.repos.getCommit({
+          owner,
+          repo,
+          ref: commit.sha,
+        });
+        return data;
+      } catch (error) {
+        console.warn(`[Node B] Could not load commit ${commit.sha.slice(0, 7)}; skipping it.`, error);
+        return null;
+      }
+    }),
+  );
 
-  try {
-    // 1. Fetch recent commits (cap at 8 to protect rate limits & latency)
-    const { data: recentCommits } = await octokit.repos.listCommits({
-      owner,
-      repo,
-      since: sinceDate,
-      per_page: 8,
+  const candidateCommits: CandidateCommitMeta[] = [];
+  const candidateFiles = new Set<string>();
+
+  for (const commit of commitDetails) {
+    if (!commit) continue;
+
+    const files = commit.files ?? [];
+    const filesChanged = [...new Set(files.flatMap((file) =>
+      [file.filename, file.previous_filename].filter((path): path is string => Boolean(path)),
+    ))];
+    const diff = files
+      .map((file) => `--- ${file.filename}\n+++ ${file.filename}\n${file.patch ?? "(patch unavailable)"}`)
+      .join("\n\n")
+      .slice(0, 10000);
+
+    candidateCommits.push({
+      sha: commit.sha,
+      author: commit.author?.login ?? commit.commit.author?.name ?? "Unknown",
+      message: commit.commit.message,
+      date: commit.commit.author?.date ?? commit.commit.committer?.date ?? "",
+      filesChanged,
+      diff,
     });
 
-    if (recentCommits.length === 0) {
-      console.log(`[Node B] No commits merged in the last 24 hours.`);
-      return { candidateCommits: [] };
-    }
-
-    // 2. Concurrently fetch full commit data to get files and diffs
-    const commitDetails = await Promise.all(
-      recentCommits.map(async (c) => {
-        try {
-          const { data } = await octokit.repos.getCommit({
-            owner,
-            repo,
-            ref: c.sha,
-          });
-          return data;
-        } catch (err) {
-          console.warn(`[Node B] Failed to fetch commit details for ${c.sha.slice(0, 7)}:`, err);
-          return null;
-        }
-      })
-    );
-
-    const candidateCommits: CandidateCommit[] = [];
-
-    for (const fullCommit of commitDetails) {
-      if (!fullCommit) continue;
-
-      const commitFiles = fullCommit.files?.map((f) => f.filename) || [];
-
-      // Check for file overlap with stack trace
-      let isRelevant = false;
-
-      if (impactedFiles.length > 0) {
-        isRelevant = impactedFiles.some((traceFile) =>
-          commitFiles.some(
-            (repoFile) => repoFile.endsWith(traceFile) || traceFile.endsWith(repoFile)
-          )
-        );
-      } else {
-        // Fallback: If stack trace lacked clean file paths, only evaluate the most recent 2 commits
-        isRelevant = candidateCommits.length < 2;
-      }
-
-      if (isRelevant) {
-        const diffAggregated = (fullCommit.files || [])
-          .map(
-            (f) =>
-              `--- ${f.filename}\n+++ ${f.filename}\n${f.patch || "(binary or large diff omitted)"}`
-          )
-          .join("\n\n");
-
-        candidateCommits.push({
-          sha: fullCommit.sha,
-          message: fullCommit.commit.message,
-          author: fullCommit.commit.author?.name || undefined,
-          date: fullCommit.commit.author?.date || undefined,
-          filesChanged: commitFiles,
-          diff: diffAggregated.slice(0, 10000), // Protect Gemini context window
-        });
+    for (const file of files) {
+      if (file.status !== "removed" && isSourceFile(file.filename)) {
+        candidateFiles.add(file.filename);
       }
     }
-
-    console.log(`[Node B] Identified ${candidateCommits.length} candidate culprit commits.`);
-    return { candidateCommits };
-  } catch (error) {
-    console.error(`[Node B] Error during Octokit git analysis:`, error);
-    return { candidateCommits: [] };
   }
+
+  const sourceFiles = [...candidateFiles];
+  const prioritizedFiles = await selectSuspectFiles(sourceFiles, state);
+  const inspectedFiles: NonNullable<IncidentAgentUpdate["inspectedFiles"]> = [];
+
+  for (const path of prioritizedFiles) {
+    try {
+      const { data } = await octokit.rest.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref: defaultBranch,
+      });
+      if (Array.isArray(data) || data.type !== "file" || !("content" in data) || data.encoding !== "base64") {
+        console.warn(`[Node B] Skipping ${path}: GitHub did not return a regular file.`);
+        continue;
+      }
+
+      inspectedFiles.push({
+        path,
+        content: applyLineBudget(decodeFileContent(data.content), path),
+      });
+    } catch (error) {
+      console.warn(`[Node B] Could not hydrate ${path} from ${defaultBranch}; skipping it.`, error);
+    }
+  }
+
+  console.log(`[Node B] Selected ${candidateCommits.length} commits and hydrated ${inspectedFiles.length} source files.`);
+  return { candidateCommits, inspectedFiles };
 }
