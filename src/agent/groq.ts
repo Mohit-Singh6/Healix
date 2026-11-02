@@ -1,5 +1,7 @@
-const defaultGroqModel = "llama-3.3-70b-versatile";
-const triageClassifierModel = "llama-3.1-8b-instant";
+const defaultGroqModel = "openai/gpt-oss-120b";      // Replaces llama-3.3-70b-versatile
+const triageClassifierModel = "openai/gpt-oss-20b"; // Replaces llama-3.1-8b-instant
+
+// these models are replaced because the previous one's are deprecated and no longer available on groq.com. The new models are smaller, cheaper, and faster, while still being capable of performing the required tasks.
 
 type SuspectFileClassificationInput = {
   errorMessage: string;
@@ -8,7 +10,10 @@ type SuspectFileClassificationInput = {
   candidateFiles: string[];
 };
 
-export async function generateGroqJson(prompt: string): Promise<string> {
+export async function generateGroqJson(
+  prompt: string,
+  model = process.env.GROQ_MODEL || defaultGroqModel,
+): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     throw new Error("GROQ_API_KEY is not configured; cannot use the Groq fallback.");
@@ -21,7 +26,7 @@ export async function generateGroqJson(prompt: string): Promise<string> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.GROQ_MODEL || defaultGroqModel,
+      model,
       messages: [
         {
           role: "system",
