@@ -78,8 +78,8 @@ function OperatorMenu({ user }: { user: NavbarUser }) {
 function InternalLinks({ pathname }: { pathname: string }) {
   const links = [
     { label: "War Room", href: "/dashboard", active: pathname === "/dashboard" },
-    { label: "Incidents", href: "/dashboard/incidents", active: pathname === "/dashboard/incidents" || pathname.startsWith("/incidents/") },
-    { label: "Services", href: "/dashboard/services", active: pathname === "/dashboard/services" },
+    { label: "Incidents", href: "/incidents", active: pathname === "/incidents" || pathname.startsWith("/incidents/") || pathname === "/dashboard/incidents" },
+    { label: "Services", href: "/services", active: pathname === "/services" || pathname === "/dashboard/services" },
     { label: "Docs", href: "/#architecture", active: false },
   ];
 
@@ -102,7 +102,7 @@ function InternalLinks({ pathname }: { pathname: string }) {
 
 export default function Navbar({ user }: { user: NavbarUser | null }) {
   const pathname = usePathname();
-  const isInternalRoute = pathname.startsWith("/dashboard") || pathname.startsWith("/incidents/");
+  const isInternalRoute = pathname.startsWith("/dashboard") || pathname.startsWith("/incidents/") || pathname === "/incidents" || pathname === "/services";
   const showInternalNav = isInternalRoute || Boolean(user);
 
   return (
@@ -115,7 +115,7 @@ export default function Navbar({ user }: { user: NavbarUser | null }) {
             <InternalLinks pathname={pathname} />
             <div className="order-1 flex shrink-0 items-center gap-2 sm:order-none sm:gap-3">
               <Link
-                href="/dashboard/services"
+                href="/services"
                 className="inline-flex items-center gap-1.5 rounded-md border border-[#33322C] bg-[#1E1E1B] px-3.5 py-1.5 font-mono text-sm text-[#EDEDE8] transition-all hover:border-[#F59E0B]/50 hover:bg-[#282723]"
               >
                 <span aria-hidden="true">+</span> Add Service

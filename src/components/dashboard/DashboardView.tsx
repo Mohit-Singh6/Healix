@@ -391,18 +391,20 @@ export default function DashboardView({
     selectedIncidentFilters.length === 0 ||
     selectedIncidentFilters.some((filter) => matchesIncidentFilter(incident.status, filter)),
   );
+  const displayedServices = view === "overview" ? services.slice(0, 3) : services;
+  const displayedIncidents = view === "overview" ? filteredIncidents.slice(0, 3) : filteredIncidents;
 
   return (
     <main className="mx-auto w-full max-w-[1600px] flex-1 bg-[#121211] px-5 pb-20 pt-9 text-[#EDEDE8] sm:px-8 lg:px-12">
       <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">Workspace / {view}</p>
+          <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">Workspace / {view === "overview" ? "war-room" : view}</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[#EDEDE8] sm:text-4xl">
             {view === "overview" ? "War Room" : view === "services" ? "Services" : "Incidents"}
           </h1>
           <p className="mt-2 text-base text-[#A1A19A]">
             {view === "overview"
-              ? "Your services and incident response at a glance."
+              ? "Your services, signals, and response queue at a glance."
               : view === "services"
                 ? "Manage the services connected to your workspace."
                 : "Filter, review, and manage incidents across your services."}
@@ -433,31 +435,17 @@ export default function DashboardView({
           highlight
         />
       </section>
-      <section aria-label="Workspace sections" className="mt-6 grid gap-4 sm:grid-cols-2">
-        <Link href="/dashboard/services" className="group rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-5 transition-colors hover:border-[#F59E0B]/50">
-          <span className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Connected resources</span>
-          <span className="mt-2 flex items-center justify-between text-lg font-semibold text-[#EDEDE8]">
-            Services <ArrowRight aria-hidden="true" size={18} className="text-[#A1A19A] transition-transform group-hover:translate-x-1" />
-          </span>
-          <span className="mt-1 block text-sm text-[#A1A19A]">{services.length} registered</span>
-        </Link>
-        <Link href="/dashboard/incidents" className="group rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-5 transition-colors hover:border-[#F59E0B]/50">
-          <span className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Response queue</span>
-          <span className="mt-2 flex items-center justify-between text-lg font-semibold text-[#EDEDE8]">
-            Incidents <ArrowRight aria-hidden="true" size={18} className="text-[#A1A19A] transition-transform group-hover:translate-x-1" />
-          </span>
-          <span className="mt-1 block text-sm text-[#A1A19A]">{activeIncidents} active · {pendingApprovals} awaiting approval</span>
-        </Link>
-      </section>
       </>
       )}
 
-      {view === "services" && (
-      <section id="services" className="mt-8 scroll-mt-20">
+      {view !== "incidents" && (
+      <section id="services" className="mt-12 scroll-mt-20">
         <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
             <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Service health / telemetry matrix</p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-[#EDEDE8]">Connected services</h2>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-[#EDEDE8]">
+              {view === "overview" ? "Monitored services" : "Connected services"}
+            </h2>
           </div>
           <button
             type="button"
@@ -478,7 +466,7 @@ export default function DashboardView({
                 <p className="mt-1 text-base leading-relaxed text-[#8E8E86]">Connect a GitHub repository to generate its incident-ingestion webhook.</p>
               </div>
             )}
-            {services.map((service) => (
+            {displayedServices.map((service) => (
               <article
                 key={service.id}
                 className="grid gap-4 px-4 py-4 transition-colors hover:bg-[#1D1D19] sm:px-5 xl:grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_repeat(3,minmax(100px,.65fr))_minmax(190px,1fr)] xl:items-center"
@@ -568,24 +556,33 @@ export default function DashboardView({
             ))}
           </div>
         </div>
+        {view === "overview" && services.length > 3 && (
+          <div className="mt-3 flex justify-end">
+            <Link href="/services" className="inline-flex items-center gap-1 font-mono text-xs text-[#F59E0B] transition-colors hover:text-[#FDBA32]">
+              Show more services <ArrowRight aria-hidden="true" size={14} />
+            </Link>
+          </div>
+        )}
         <p aria-live="polite" className="mt-2 min-h-4 font-mono text-xs text-[#8A8A82]">{copyMessage}</p>
         {serviceActionMessage && <p aria-live="polite" className="mt-1 font-mono text-xs text-emerald-400">{serviceActionMessage}</p>}
         {serviceError && <p role="alert" className="mt-2 font-mono text-xs text-rose-300">{serviceError}</p>}
       </section>
       )}
 
-      {view === "incidents" && (
-      <section id="incidents" className="mt-8 scroll-mt-20">
+      {view !== "services" && (
+      <section id="incidents" className="mt-12 scroll-mt-20">
         <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
             <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Live incident feed</p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-[#EDEDE8]">Incidents across your services</h2>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-[#EDEDE8]">
+              {view === "overview" ? "Needs your attention" : "Incidents across your services"}
+            </h2>
           </div>
           <span className="inline-flex items-center gap-2 font-mono text-xs text-[#F59E0B]">
             <CircleAlert aria-hidden="true" size={15} /> {activeIncidents} active incidents
           </span>
         </div>
-        <fieldset className="mb-4 rounded-lg border border-[#2B2A24] bg-[#181816] px-4 py-3">
+        {view === "incidents" && <fieldset className="mb-4 rounded-lg border border-[#2B2A24] bg-[#181816] px-4 py-3">
           <legend className="px-1 font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Filter incidents</legend>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             {incidentFilterOptions.map((option) => (
@@ -608,7 +605,7 @@ export default function DashboardView({
               Clear filters
             </button>
           </div>
-        </fieldset>
+        </fieldset>}
         {incidentDeleteError && <p role="alert" className="mb-3 rounded border border-rose-900/50 bg-rose-950/20 px-3 py-2 text-sm text-rose-300">{incidentDeleteError}</p>}
         <div className="flex flex-col gap-3">
           {visibleIncidents.length === 0 && (
@@ -625,7 +622,7 @@ export default function DashboardView({
               </button>
             </div>
           )}
-          {filteredIncidents.map((incident) => {
+          {displayedIncidents.map((incident) => {
             const outcome = incidentOutcome(incident);
             return (
               <article
@@ -692,6 +689,13 @@ export default function DashboardView({
             );
           })}
         </div>
+        {view === "overview" && visibleIncidents.length > 3 && (
+          <div className="mt-3 flex justify-end">
+            <Link href="/incidents" className="inline-flex items-center gap-1 font-mono text-xs text-[#F59E0B] transition-colors hover:text-[#FDBA32]">
+              Show more incidents <ArrowRight aria-hidden="true" size={14} />
+            </Link>
+          </div>
+        )}
       </section>
       )}
 
