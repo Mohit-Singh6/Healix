@@ -7,6 +7,23 @@ type ProjectGitHubCredentials = {
   githubInstallationId: string | null;
 };
 
+function cleanPrivateKey(rawKey: string): string {
+  let key = rawKey.trim();
+
+  // Strip surrounding quotes if Vercel or .env added them
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1);
+  }
+
+  // Convert literal escaped "\n" back to real newlines
+  key = key.replace(/\\n/g, "\n").replace(/\\r/g, "");
+
+  return key;
+}
+
 function getGitHubAppCredentials() {
   const appIdValue = process.env.GITHUB_APP_ID;
   const privateKeyValue = process.env.GITHUB_APP_PRIVATE_KEY;
@@ -20,7 +37,7 @@ function getGitHubAppCredentials() {
 
   return {
     appId: appIdValue,
-    privateKey: privateKeyValue.replace(/\\n/g, "\n"),
+    privateKey: cleanPrivateKey(privateKeyValue),
   };
 }
 
