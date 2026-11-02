@@ -185,6 +185,7 @@ async function runGeminiInvestigation(
     }
 
     console.log(`[Node C] Gemini requested ${calls.length} tool call(s).`);
+    console.log(`[Node C] Tool calls: ${calls.map((call) => call.name).join(", ")}`);
     const functionResponses = [];
     for (const call of calls) {
       if (!call.name) throw new Error("Gemini returned a tool call without a name.");
@@ -207,6 +208,8 @@ async function runGeminiInvestigation(
     }
     geminiCallCount += 1;
     console.log(`[Node C] Gemini call #${geminiCallCount}: reviewing tool results.`);
+    // print the output of the calls
+    console.log(`[Node C] Tool outputs:\n${functionResponses.map((r) => `--- ${r.functionResponse.name} ---\n${r.functionResponse.response.content}`).join("\n\n")}`);
     response = await chat.sendMessage({ message: functionResponses });
   }
 
