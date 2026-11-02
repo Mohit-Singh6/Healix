@@ -13,6 +13,19 @@ const alertPayloadSchema = z.object({
   endpoint: z.string().optional().nullable(),
 });
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+};
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     // 1. Auth Check: Verify x-project-key matches a registered Project
@@ -20,7 +33,7 @@ export async function POST(req: NextRequest) {
     if (!apiKey) {
       return NextResponse.json(
         { error: "Unauthorized: Missing x-project-key header" },
-        { status: 401 }
+        { status: 401, headers: corsHeaders }
       );
     }
 
@@ -32,7 +45,7 @@ export async function POST(req: NextRequest) {
     if (!project) {
       return NextResponse.json(
         { error: "Unauthorized: Invalid project API key" },
-        { status: 401 }
+        { status: 401, headers: corsHeaders }
       );
     }
 
@@ -46,7 +59,7 @@ export async function POST(req: NextRequest) {
           error: "Unprocessable Entity",
           details: z.flattenError(parseResult.error).fieldErrors,
         },
-        { status: 422 }
+        { status: 422, headers: corsHeaders }
       );
     }
 
@@ -83,13 +96,13 @@ export async function POST(req: NextRequest) {
         queued: true,
         jobId,
       },
-      { status: 202 }
+      { status: 202, headers: corsHeaders }
     );
   } catch (error) {
     console.error("Alert webhook ingestion error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
