@@ -7,7 +7,7 @@ import { decryptProjectSecret } from "../../lib/project-secrets";
 const SOURCE_EXTENSIONS = new Set([
   "js", "jsx", "ts", "tsx", "mjs", "cjs", "vue", "svelte", "py", "go", "rs", "java",
 ]);
-const MAX_INSPECTED_FILES = 5;
+const MAX_INSPECTED_FILES = 7;
 const MAX_FILE_LINES = 400;
 
 function isSourceFile(path: string): boolean {
@@ -32,58 +32,68 @@ function isSourceFile(path: string): boolean {
   return extension !== undefined && SOURCE_EXTENSIONS.has(extension);
 }
 
-function stackTraceMatchesFile(stackTrace: string, filePath: string): boolean {
-  if (/\.min\.[^/]+$/i.test(filePath)) return false;
-  const normalizedTrace = stackTrace.replace(/\\/g, "/").toLowerCase();
-  return normalizedTrace.includes(filePath.replace(/\\/g, "/").toLowerCase());
-}
+export function scoreAndRankCandidateFiles(params: {
+  candidateFiles: string[];
+  endpoint?: string;
+  errorMessage: string;
+  stackTrace: string;
+}): string[] {
+  const { candidateFiles, endpoint, errorMessage, stackTrace } = params;
+  const stopWords = new Set(["api", "v1", "v2", "index"]);
+  const routeTokens = (endpoint ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 0 && !stopWords.has(token));
+  const lowerStackTrace = stackTrace.toLowerCase().replace(/\\/g, "/");
+  const lowerErrorMessage = errorMessage.toLowerCase();
+  const propertyClues = [...lowerErrorMessage.matchAll(/(?:reading|property)\s+['"]([^'"]+)['"]/g)]
+    .map((match) => match[1].toLowerCase().replace(/[^a-z0-9]/g, ""))
+    .filter(Boolean);
+  const testFilePattern = /(?:^|\/)__tests__(?:\/|$)|(?:^|\/)__mocks__(?:\/|$)|\.(?:spec|test|stories)\.[^/]+$/i;
 
-function endpointMatchScore(endpoint: string | undefined, filePath: string): number {
-  if (!endpoint) return 0;
+  return candidateFiles
+    .map((filePath, index) => {
+      const lowerPath = filePath.toLowerCase().replace(/\\/g, "/");
+      const pathSegments = lowerPath.split("/").filter(Boolean);
+      const normalizedSegments = pathSegments.map((segment) => segment.replace(/\.[^.]+$/, ""));
+      let score = 0;
 
-  let pathname = endpoint;
-  try {
-    pathname = new URL(endpoint, "https://healix.invalid").pathname;
-  } catch {
-    pathname = endpoint.split("?")[0];
-  }
+      for (const token of routeTokens) {
+        if (lowerPath.includes(token)) score += 30;
+      }
 
-  const routeSegments = pathname
-    .split("/")
-    .filter((segment) => segment.length > 1 && !/^api$/i.test(segment))
-    .map((segment) => segment.toLowerCase());
-  const fileSegments = filePath.replace(/\\/g, "/").toLowerCase().split("/");
-  return routeSegments.filter((segment) =>
-    fileSegments.some((fileSegment) => fileSegment.replace(/\.[^.]+$/, "") === segment),
-  ).length;
+      if (normalizedSegments.some((segment) => lowerStackTrace.includes(segment))) score += 40;
+      if (
+        propertyClues.some((property) =>
+          normalizedSegments.some((segment) => segment.includes(property)),
+        )
+      ) {
+        score += 15;
+      }
+      if (testFilePattern.test(lowerPath)) score -= 40;
+
+      return { filePath, index, score };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map(({ filePath }) => filePath);
 }
 
 function selectSuspectFiles(
   candidateFiles: string[],
   state: IncidentAgentState,
 ): Promise<string[]> {
-  if (candidateFiles.length <= MAX_INSPECTED_FILES) return Promise.resolve(candidateFiles);
-
-  const stackMatches = candidateFiles.filter((filePath) =>
-    stackTraceMatchesFile(state.stackTrace, filePath),
-  );
-  const routeMatches = candidateFiles
-    .map((filePath) => ({ filePath, score: endpointMatchScore(state.endpoint, filePath) }))
-    .filter((candidate) => candidate.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .map((candidate) => candidate.filePath);
-  const prioritizedFiles = [...new Set([...stackMatches, ...routeMatches])].slice(0, MAX_INSPECTED_FILES);
-  const remainingFiles = candidateFiles.filter((filePath) => !prioritizedFiles.includes(filePath));
-  const availableSlots = MAX_INSPECTED_FILES - prioritizedFiles.length;
-
+  const rankedFiles = scoreAndRankCandidateFiles({
+    candidateFiles,
+    endpoint: state.endpoint,
+    errorMessage: state.errorMessage,
+    stackTrace: state.stackTrace,
+  });
   return fastClassifySuspectFiles({
     errorMessage: state.errorMessage,
     endpoint: state.endpoint,
     stackTrace: state.stackTrace,
-    candidateFiles: remainingFiles,
-  }).then((classifiedFiles) =>
-    [...prioritizedFiles, ...classifiedFiles.slice(0, availableSlots)].slice(0, MAX_INSPECTED_FILES),
-  );
+    candidateFiles: rankedFiles,
+  }).then((classifiedFiles) => classifiedFiles.slice(0, MAX_INSPECTED_FILES));
 }
 
 function decodeFileContent(encodedContent: string): string {
