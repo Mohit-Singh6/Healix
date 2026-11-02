@@ -72,11 +72,8 @@ export default async function NewServicePage({
       repoOwner: { equals: repository.owner.login, mode: "insensitive" },
       repoName: { equals: repository.name, mode: "insensitive" },
     },
-    select: { id: true },
+    select: { id: true, name: true, apiKey: true },
   });
-  if (existingService) {
-    redirect(`/services/new/select-repo?installation_id=${encodeURIComponent(installationId)}`);
-  }
 
   return (
     <main className="min-h-screen bg-[#121211] px-4 py-12 text-[#EDEDE8]">
@@ -97,6 +94,10 @@ export default async function NewServicePage({
           owner={repository.owner.login}
           repo={repository.name}
           branch={verifiedBranch}
+          initialResult={existingService ? {
+            serviceName: existingService.name,
+            webhookUrl: `/api/incidents/webhook?apiKey=${encodeURIComponent(existingService.apiKey)}`,
+          } : null}
         />
       </section>
     </main>

@@ -34,7 +34,7 @@ function FormField({
     <label className="flex flex-col gap-1.5 text-sm text-[#D4D4CE]">
       {label}
       <input
-        className={`${fieldClassName} ${readOnly ? "cursor-not-allowed text-[#8E8E86] opacity-80" : ""}`}
+        className={`${fieldClassName} ${readOnly ? "cursor-not-allowed text-[#8E8E86] opacity-70" : ""}`}
         name={name}
         defaultValue={defaultValue}
         placeholder={placeholder}
@@ -53,16 +53,19 @@ export default function ServiceConfigForm({
   owner,
   repo,
   branch,
+  initialResult = null,
 }: {
   installationId: string;
   owner: string;
   repo: string;
   branch: string;
+  initialResult?: { serviceName: string; webhookUrl: string } | null;
 }) {
   const [deploymentProvider, setDeploymentProvider] = useState<DeploymentProvider>("NONE");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [result, setResult] = useState<{ serviceName: string; webhookUrl: string } | null>(null);
+  const displayedResult = result ?? initialResult;
 
   async function submitService(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,20 +91,20 @@ export default function ServiceConfigForm({
     }
   }
 
-  if (result) {
+  if (displayedResult) {
     return (
       <section className="mt-8 rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-6">
         <p className="font-mono text-xs tracking-widest text-[#10B981]">SERVICE CONNECTED</p>
-        <h2 className="mt-2 text-xl font-semibold text-[#EDEDE8]">{result.serviceName}</h2>
+        <h2 className="mt-2 text-xl font-semibold text-[#EDEDE8]">{displayedResult.serviceName}</h2>
         <p className="mt-2 text-sm text-[#A1A19A]">Copy this ingestion endpoint into your alert source.</p>
         <code className="mt-4 block break-all rounded border border-[#2B2A24] bg-[#121211] p-3 font-mono text-sm text-[#D4D4CE]">
-          {result.webhookUrl}
+          {displayedResult.webhookUrl}
         </code>
         <button
           type="button"
           onClick={async () => {
             try {
-              await navigator.clipboard.writeText(result.webhookUrl);
+              await navigator.clipboard.writeText(displayedResult.webhookUrl);
             } catch (error) {
               console.error("Unable to copy the service webhook URL.", error);
               setFormError("Could not copy the webhook URL. Select and copy it manually.");
@@ -148,26 +151,76 @@ export default function ServiceConfigForm({
       </div>
 
       {deploymentProvider === "VERCEL" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Vercel resource ID" name="platformServiceId" placeholder="prj_xxxxxxxxxxxxxxxxxxxx" required />
-          <FormField label="Vercel access token" name="platformApiToken" type="password" required />
-          <FormField label="Vercel team ID (optional)" name="platformTeamId" placeholder="team_xxxxxxxxxxxxxxxxxxxx" />
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              label="Vercel resource ID"
+              name="platformServiceId"
+              placeholder="prj_xxxxxxxxxxxxxxxxxxxx"
+              required
+              helper="Found in Vercel resource settings → General."
+            />
+            <FormField
+              label="Vercel Access Token"
+              name="platformApiToken"
+              type="password"
+              required
+              helper="Generated under Vercel Account Settings → Tokens."
+            />
+            <FormField
+              label="Vercel Team ID (optional)"
+              name="platformTeamId"
+              placeholder="team_xxxxxxxxxxxxxxxxxxxx"
+              helper="Leave blank for a personal account."
+            />
+          </div>
+          <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+            Healix will use this Vercel connection only for approved runtime configuration patches.
+          </p>
         </div>
       )}
       {deploymentProvider === "RENDER" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Render service ID" name="platformServiceId" placeholder="srv-xxxxxxxxxxxxxxxxxxxx" required />
-          <FormField label="Render API key" name="platformApiToken" type="password" required />
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              label="Render Service ID"
+              name="platformServiceId"
+              placeholder="srv-xxxxxxxxxxxxxxxxxxxx"
+              required
+              helper="Found in the URL of your Render service dashboard."
+            />
+            <FormField
+              label="Render API Key"
+              name="platformApiToken"
+              type="password"
+              required
+              helper="Generated under Render Account Settings → API Keys."
+            />
+          </div>
+          <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+            Healix will use this Render connection only for approved runtime configuration patches.
+          </p>
         </div>
       )}
+      {deploymentProvider === "NONE" && (
+        <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+          Healix will handle automated code fixes and revert PRs on GitHub. Automated runtime configuration patching will be skipped.
+        </p>
+      )}
       {deploymentProvider === "CUSTOM" && (
-        <FormField
-          label="Custom webhook URL"
-          name="customWebhookUrl"
-          type="url"
-          placeholder="https://infra.yourcompany.com/api/healix-patch"
-          required
-        />
+        <div className="flex flex-col gap-4">
+          <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+            Healix will send signed requests to this endpoint when approved runtime configuration patches are needed.
+          </p>
+          <FormField
+            label="Custom webhook URL"
+            name="customWebhookUrl"
+            type="url"
+            placeholder="https://infra.yourcompany.com/api/healix-patch"
+            required
+            helper="Requests include configKey and configValue and use an HMAC-SHA256 signature."
+          />
+        </div>
       )}
 
       {formError && (
