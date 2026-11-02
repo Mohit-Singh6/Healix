@@ -110,7 +110,15 @@ export async function createService(formData: FormData): Promise<CreateServiceRe
     if (data.githubInstallationId) {
       const cookieStore = await cookies();
       const pendingInstallationId = cookieStore.get("healix_pending_github_installation")?.value;
-      if (pendingInstallationId !== data.githubInstallationId) {
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+      const linkedInstallation = user && await prisma.project.findFirst({
+        where: { userId: user.id, githubInstallationId: data.githubInstallationId },
+        select: { id: true },
+      });
+      if (pendingInstallationId !== data.githubInstallationId && !linkedInstallation) {
         return { success: false, error: "Reconnect the GitHub App before registering this service." };
       }
 
@@ -181,13 +189,15 @@ export async function createService(formData: FormData): Promise<CreateServiceRe
     });
     if (data.githubInstallationId) {
       const cookieStore = await cookies();
-      cookieStore.set("healix_pending_github_installation", "", {
-        httpOnly: true,
-        maxAge: 0,
-        path: "/",
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-      });
+      if (cookieStore.get("healix_pending_github_installation")?.value === data.githubInstallationId) {
+        cookieStore.set("healix_pending_github_installation", "", {
+          httpOnly: true,
+          maxAge: 0,
+          path: "/",
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+        });
+      }
     }
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/services");

@@ -206,7 +206,7 @@ function FormField({
     <label className="flex flex-col gap-1.5 text-sm text-[#D4D4CE]">
       {label}
       <input
-        className={fieldClassName}
+        className={`${fieldClassName} ${readOnly ? "text-[#8E8E86] opacity-80 cursor-not-allowed" : ""}`}
         name={name}
         type={type}
         placeholder={placeholder}
@@ -227,7 +227,7 @@ export default function DashboardView({
   resolvedIncidents,
   pendingApprovals,
   activeIncidents,
-  initialConnectedRepository = null,
+  githubInstallationIds = [],
   initialGitHubError,
 }: {
   view: DashboardViewMode;
@@ -236,13 +236,11 @@ export default function DashboardView({
   resolvedIncidents: number;
   pendingApprovals: number;
   activeIncidents: number;
-  initialConnectedRepository?: ConnectedRepository | null;
+  githubInstallationIds?: string[];
   initialGitHubError?: string;
 }) {
   const [services, setServices] = useState(initialServices.map(toServiceRow));
-  const [isAddServiceOpen, setIsAddServiceOpen] = useState(
-    Boolean(initialConnectedRepository || initialGitHubError),
-  );
+  const [isAddServiceOpen, setIsAddServiceOpen] = useState(Boolean(initialGitHubError));
   const [editingService, setEditingService] = useState<ServiceRow | null>(null);
   const [isUpdatingService, setIsUpdatingService] = useState(false);
   const [serviceError, setServiceError] = useState("");
@@ -258,9 +256,7 @@ export default function DashboardView({
   const [formError, setFormError] = useState(() => githubErrorMessage(initialGitHubError));
   const [deploymentProvider, setDeploymentProvider] = useState<DeploymentProvider>("NONE");
   const [createdService, setCreatedService] = useState<{ name: string; webhookUrl: string } | null>(null);
-  const [connectedRepository, setConnectedRepository] = useState<ConnectedRepository | null>(
-    initialConnectedRepository,
-  );
+  const [connectedRepository, setConnectedRepository] = useState<ConnectedRepository | null>(null);
 
   useEffect(() => {
     if (!isAddServiceOpen) return;
@@ -336,7 +332,6 @@ export default function DashboardView({
     setIsAddServiceOpen(false);
     setFormError("");
     setCreatedService(null);
-    setConnectedRepository(null);
     setDeploymentProvider("NONE");
     window.history.replaceState(null, "", window.location.pathname);
   }
@@ -787,9 +782,7 @@ export default function DashboardView({
                 <p className="mt-2 text-sm leading-relaxed text-[#A1A19A]">
                   {createdService
                     ? `${createdService.name} is registered. Add this endpoint to your alert source.`
-                    : connectedRepository
-                      ? "Confirm the repository details and configure optional runtime remediation."
-                      : "Connect your GitHub repository to enable autonomous monitoring."}
+                    : "Choose an existing GitHub App installation or connect a repository to enable autonomous monitoring."}
                 </p>
               </div>
               <button
@@ -839,6 +832,30 @@ export default function DashboardView({
                 <p className="text-sm leading-relaxed text-[#A1A19A]">
                   Healix needs repository permissions to inspect commits, diagnose incidents, and submit verified fix pull requests.
                 </p>
+                {githubInstallationIds.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Existing installations</p>
+                    {githubInstallationIds.map((installationId) => (
+                      <div key={installationId} className="flex flex-wrap items-center justify-between gap-3 rounded border border-[#2B2A24] bg-[#121211] p-3">
+                        <span className="font-mono text-xs text-[#A1A19A]">GitHub App installation {installationId}</span>
+                        <span className="flex items-center gap-3">
+                          <Link
+                            href={`/services/new/select-repo?installation_id=${encodeURIComponent(installationId)}`}
+                            className="font-mono text-xs text-[#F59E0B] hover:text-[#FDBA32]"
+                          >
+                            Browse repositories
+                          </Link>
+                          <a
+                            href={`/api/github/install?installation_id=${encodeURIComponent(installationId)}`}
+                            className="font-mono text-xs text-[#8E8E86] hover:text-[#EDEDE8]"
+                          >
+                            Update access
+                          </a>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {formError && (
                   <p role="alert" className="rounded border border-rose-800/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
                     {formError}

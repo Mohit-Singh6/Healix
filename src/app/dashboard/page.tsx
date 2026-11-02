@@ -14,25 +14,10 @@ export default async function DashboardPage({
 }) {
   const data = await getDashboardData();
   const query = await searchParams;
-  const connectedRepository =
-    query.installation_id &&
-    /^[1-9]\d*$/.test(query.installation_id) &&
-    query.owner &&
-    query.repo &&
-    query.branch
-      ? {
-          installationId: query.installation_id,
-          owner: query.owner,
-          repo: query.repo,
-          branch: query.branch,
-        }
-      : null;
-
   return (
     <DashboardView
       view="overview"
       {...data}
-      initialConnectedRepository={connectedRepository}
       initialGitHubError={query.github_error}
     />
   );

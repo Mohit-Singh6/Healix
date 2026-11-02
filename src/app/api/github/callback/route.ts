@@ -2,6 +2,7 @@ import { auth } from "@/src/auth";
 import { listInstallationRepositories } from "@/src/lib/github-app";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { prisma } from "@/src/lib/prisma";
 
 const INSTALL_STATE_COOKIE = "healix_github_install_state";
 const PENDING_INSTALLATION_COOKIE = "healix_pending_github_installation";
@@ -31,7 +32,7 @@ function selectedRepositoryUrl(
   repo: string,
   branch: string,
 ) {
-  const target = new URL("/dashboard", request.url);
+  const target = new URL("/services/new", request.url);
   target.searchParams.set("installation_id", installationId);
   target.searchParams.set("owner", owner);
   target.searchParams.set("repo", repo);
@@ -51,28 +52,52 @@ export async function GET(request: Request) {
   const setupAction = url.searchParams.get("setup_action");
   const cookieStore = await cookies();
   const expectedState = cookieStore.get(INSTALL_STATE_COOKIE)?.value;
+  const hasValidState = Boolean(state && expectedState && state === expectedState);
 
-  if (!state || !expectedState || state !== expectedState) {
-    return new Response("GitHub installation state validation failed.", { status: 400 });
-  }
-
-  if (setupAction !== "install" || !installationId || !/^[1-9]\d*$/.test(installationId)) {
+  if (
+    (setupAction !== "install" && setupAction !== "update") ||
+    !installationId ||
+    !/^[1-9]\d*$/.test(installationId)
+  ) {
     return dashboardRedirect(request, "installation_not_completed", true);
   }
 
   try {
-    const repositories = await listInstallationRepositories(installationId);
-    if (repositories.length === 0) {
-      return dashboardRedirect(request, "no_repositories", true);
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    if (!user) return dashboardRedirect(request, "installation_not_completed", true);
+
+    const linkedInstallation = hasValidState
+      ? true
+      : Boolean(await prisma.project.findFirst({
+          where: { userId: user.id, githubInstallationId: installationId },
+          select: { id: true },
+        }));
+    if (!hasValidState && (setupAction !== "update" || !linkedInstallation)) {
+      return new Response("GitHub installation state validation failed.", { status: 400 });
     }
 
-    const target = repositories.length === 1
+    const repositories = await listInstallationRepositories(installationId);
+    const existingServices = await prisma.project.findMany({
+      where: { userId: user.id, githubInstallationId: installationId },
+      select: { repoOwner: true, repoName: true },
+    });
+    const registeredSet = new Set(
+      existingServices.map((service) => `${service.repoOwner}/${service.repoName}`.toLowerCase()),
+    );
+    const unconfiguredRepositories = repositories.filter(
+      (repository) => !registeredSet.has(`${repository.owner.login}/${repository.name}`.toLowerCase()),
+    );
+
+    const target = unconfiguredRepositories.length === 1
       ? selectedRepositoryUrl(
         request,
         installationId,
-        repositories[0].owner.login,
-        repositories[0].name,
-        repositories[0].default_branch || "main",
+        unconfiguredRepositories[0].owner.login,
+        unconfiguredRepositories[0].name,
+        unconfiguredRepositories[0].default_branch || "main",
       )
       : new URL(`/services/new/select-repo?installation_id=${encodeURIComponent(installationId)}`, request.url);
     const response = NextResponse.redirect(target);

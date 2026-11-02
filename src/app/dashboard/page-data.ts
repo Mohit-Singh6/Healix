@@ -13,7 +13,7 @@ export async function getDashboardData() {
   });
   if (!user) redirect("/auth");
 
-  const [services, incidents, resolvedIncidents, pendingApprovals, activeIncidents] = await Promise.all([
+  const [services, installationRows, incidents, resolvedIncidents, pendingApprovals, activeIncidents] = await Promise.all([
     prisma.project.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -25,6 +25,11 @@ export async function getDashboardData() {
         defaultBranch: true,
         deployedUrl: true,
       },
+    }),
+    prisma.project.findMany({
+      where: { userId: user.id, githubInstallationId: { not: null } },
+      distinct: ["githubInstallationId"],
+      select: { githubInstallationId: true },
     }),
     listUserIncidents(user.id),
     prisma.incident.count({
@@ -43,6 +48,9 @@ export async function getDashboardData() {
 
   return {
     initialServices: services,
+    githubInstallationIds: installationRows.flatMap((service) =>
+      service.githubInstallationId ? [service.githubInstallationId] : [],
+    ),
     initialIncidents: incidents,
     resolvedIncidents,
     pendingApprovals,
