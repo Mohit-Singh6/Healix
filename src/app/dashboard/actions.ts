@@ -1,9 +1,11 @@
 "use server";
 
 import { auth } from "@/src/auth";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/src/lib/prisma";
 import { encryptProjectSecret } from "@/src/lib/project-secrets";
+import { getInstallationRepository } from "@/src/lib/github-app";
 import { z } from "zod";
 
 const optionalUrl = z.preprocess(
@@ -25,7 +27,8 @@ const serviceFormSchema = z.object({
   name: z.string().trim().min(1, "Enter a service name.").max(100),
   repoOwner: z.string().trim().min(1, "Enter the repository owner.").max(100).regex(/^[A-Za-z0-9_.-]+$/, "Use a valid GitHub owner name."),
   repoName: z.string().trim().min(1, "Enter the repository name.").max(100).regex(/^[A-Za-z0-9_.-]+$/, "Use a valid GitHub repository name."),
-  githubToken: z.string().trim().min(1, "Enter a GitHub personal access token.").max(500),
+  githubToken: optionalSecret,
+  githubInstallationId: z.string().regex(/^[1-9]\d*$/, "Connect a valid GitHub App installation.").optional(),
   defaultBranch: z.string().trim().min(1, "Enter a default branch.").max(255),
   deployedUrl: optionalUrl,
   deploymentProvider: z.enum(["NONE", "VERCEL", "RENDER", "CUSTOM"]),
@@ -34,6 +37,14 @@ const serviceFormSchema = z.object({
   platformTeamId: optionalText,
   customWebhookUrl: optionalUrl,
 }).superRefine((project, context) => {
+  if (Boolean(project.githubToken) === Boolean(project.githubInstallationId)) {
+    context.addIssue({
+      code: "custom",
+      path: ["githubInstallationId"],
+      message: "Connect a GitHub App installation to continue.",
+    });
+  }
+
   if (project.deploymentProvider === "VERCEL" || project.deploymentProvider === "RENDER") {
     if (!project.platformServiceId) {
       context.addIssue({ code: "custom", path: ["platformServiceId"], message: "Enter the platform service ID." });
@@ -80,6 +91,7 @@ export async function createService(formData: FormData): Promise<CreateServiceRe
     repoOwner: readFormString(formData, "repoOwner"),
     repoName: readFormString(formData, "repoName"),
     githubToken: readFormString(formData, "githubToken"),
+    githubInstallationId: readFormString(formData, "githubInstallationId") || undefined,
     defaultBranch: readFormString(formData, "defaultBranch"),
     deployedUrl: readFormString(formData, "deployedUrl"),
     deploymentProvider: readFormString(formData, "deploymentProvider"),
@@ -95,6 +107,27 @@ export async function createService(formData: FormData): Promise<CreateServiceRe
 
   const data = parsed.data;
   try {
+    if (data.githubInstallationId) {
+      const cookieStore = await cookies();
+      const pendingInstallationId = cookieStore.get("healix_pending_github_installation")?.value;
+      if (pendingInstallationId !== data.githubInstallationId) {
+        return { success: false, error: "Reconnect the GitHub App before registering this service." };
+      }
+
+      const repository = await getInstallationRepository(
+        data.githubInstallationId,
+        data.repoOwner,
+        data.repoName,
+      );
+      if (
+        repository.owner.login.toLowerCase() !== data.repoOwner.toLowerCase() ||
+        repository.name.toLowerCase() !== data.repoName.toLowerCase() ||
+        (repository.default_branch || "main") !== data.defaultBranch
+      ) {
+        return { success: false, error: "The selected repository details changed. Reconnect GitHub and choose the repository again." };
+      }
+    }
+
     const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (!user) return { success: false, error: "Your account could not be found. Sign out and sign in again." };
 
@@ -125,7 +158,8 @@ export async function createService(formData: FormData): Promise<CreateServiceRe
         repoName: data.repoName,
         defaultBranch: data.defaultBranch,
         deployedUrl: data.deployedUrl ?? null,
-        githubToken: encryptProjectSecret(data.githubToken),
+        githubToken: data.githubToken ? encryptProjectSecret(data.githubToken) : null,
+        githubInstallationId: data.githubInstallationId ?? null,
         deploymentProvider: data.deploymentProvider,
         platformServiceId: data.deploymentProvider === "VERCEL" || data.deploymentProvider === "RENDER"
           ? data.platformServiceId
@@ -145,6 +179,16 @@ export async function createService(formData: FormData): Promise<CreateServiceRe
         apiKey: true,
       },
     });
+    if (data.githubInstallationId) {
+      const cookieStore = await cookies();
+      cookieStore.set("healix_pending_github_installation", "", {
+        httpOnly: true,
+        maxAge: 0,
+        path: "/",
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      });
+    }
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/services");
 

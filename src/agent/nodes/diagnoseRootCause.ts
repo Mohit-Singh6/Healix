@@ -1,8 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
-import { Octokit } from "@octokit/rest";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
-import { decryptProjectSecret } from "../../lib/project-secrets";
+import { createProjectGitHubClient } from "../../lib/github-app";
 import { generateGroqJson } from "../groq";
 import { ActionPayloadSchema, ProposedActionSchema } from "../state";
 import type { IncidentAgentState, IncidentAgentUpdate } from "../state";
@@ -146,11 +145,14 @@ async function runGeminiInvestigation(
   if (!incident?.project) {
     throw new Error(`Project for incident ${state.incidentId} was not found.`);
   }
-  if (!incident.project.githubToken) {
-    throw new Error(`No GitHub token is configured for project ${incident.project.name}.`);
+  if (!incident.project.githubToken && !incident.project.githubInstallationId) {
+    throw new Error(`No GitHub credentials are configured for project ${incident.project.name}.`);
   }
 
-  const octokit = new Octokit({ auth: decryptProjectSecret(incident.project.githubToken) });
+  const octokit = createProjectGitHubClient(incident.project);
+  if (!octokit) {
+    throw new Error(`No GitHub credentials are configured for project ${incident.project.name}.`);
+  }
   const owner = incident.project.repoOwner;
   const repo = incident.project.repoName;
   let defaultBranch = incident.project.defaultBranch;

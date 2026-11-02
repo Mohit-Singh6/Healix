@@ -58,6 +58,17 @@ const incidentFilterOptions: { id: IncidentFilter; label: string }[] = [
   { id: "dismissed", label: "Dismissed" },
 ];
 
+function githubErrorMessage(error?: string): string {
+  const messages: Record<string, string> = {
+    install_unavailable: "GitHub App installation could not be started. Check the app configuration and try again.",
+    installation_not_completed: "GitHub App installation was not completed.",
+    no_repositories: "No repositories were granted to the GitHub App installation.",
+    repository_lookup_failed: "Healix could not load repositories from that GitHub App installation.",
+    installation_expired: "The GitHub App connection expired. Please connect the repository again.",
+  };
+  return error ? messages[error] ?? "GitHub repository connection failed. Please try again." : "";
+}
+
 function incidentFilterCount(incidents: DashboardIncident[], filter: IncidentFilter): number {
   return incidents.filter((incident) => matchesIncidentFilter(incident.status, filter)).length;
 }
@@ -162,6 +173,12 @@ function incidentOutcome(incident: DashboardIncident) {
 }
 
 type DeploymentProvider = "NONE" | "VERCEL" | "RENDER" | "CUSTOM";
+type ConnectedRepository = {
+  installationId: string;
+  owner: string;
+  repo: string;
+  branch: string;
+};
 
 const fieldClassName =
   "w-full rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 font-mono text-sm text-[#EDEDE8] outline-none placeholder:text-[#66665F] focus:border-[#F59E0B] focus:ring-0 focus-visible:!outline-none focus-visible:!outline-offset-0";
@@ -174,6 +191,7 @@ function FormField({
   required = false,
   defaultValue,
   helper,
+  readOnly = false,
 }: {
   label: string;
   name: string;
@@ -182,6 +200,7 @@ function FormField({
   required?: boolean;
   defaultValue?: string;
   helper?: string;
+  readOnly?: boolean;
 }) {
   return (
     <label className="flex flex-col gap-1.5 text-sm text-[#D4D4CE]">
@@ -193,6 +212,7 @@ function FormField({
         placeholder={placeholder}
         required={required}
         defaultValue={defaultValue}
+        readOnly={readOnly}
         autoComplete={type === "password" ? "new-password" : undefined}
       />
       {helper && <span className="text-xs leading-relaxed text-[#8E8E86]">{helper}</span>}
@@ -207,6 +227,8 @@ export default function DashboardView({
   resolvedIncidents,
   pendingApprovals,
   activeIncidents,
+  initialConnectedRepository = null,
+  initialGitHubError,
 }: {
   view: DashboardViewMode;
   initialServices: DashboardService[];
@@ -214,9 +236,13 @@ export default function DashboardView({
   resolvedIncidents: number;
   pendingApprovals: number;
   activeIncidents: number;
+  initialConnectedRepository?: ConnectedRepository | null;
+  initialGitHubError?: string;
 }) {
   const [services, setServices] = useState(initialServices.map(toServiceRow));
-  const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
+  const [isAddServiceOpen, setIsAddServiceOpen] = useState(
+    Boolean(initialConnectedRepository || initialGitHubError),
+  );
   const [editingService, setEditingService] = useState<ServiceRow | null>(null);
   const [isUpdatingService, setIsUpdatingService] = useState(false);
   const [serviceError, setServiceError] = useState("");
@@ -229,9 +255,12 @@ export default function DashboardView({
   const [copyMessage, setCopyMessage] = useState("");
   const copyMessageTimeout = useRef<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formError, setFormError] = useState("");
+  const [formError, setFormError] = useState(() => githubErrorMessage(initialGitHubError));
   const [deploymentProvider, setDeploymentProvider] = useState<DeploymentProvider>("NONE");
   const [createdService, setCreatedService] = useState<{ name: string; webhookUrl: string } | null>(null);
+  const [connectedRepository, setConnectedRepository] = useState<ConnectedRepository | null>(
+    initialConnectedRepository,
+  );
 
   useEffect(() => {
     if (!isAddServiceOpen) return;
@@ -281,6 +310,7 @@ export default function DashboardView({
         name: result.service.name,
         webhookUrl: new URL(result.webhookUrl, window.location.origin).toString(),
       });
+      window.history.replaceState(null, "", window.location.pathname);
     } catch (error) {
       console.error("Service registration request failed.", error);
       setFormError("Service registration failed unexpectedly. Please try again.");
@@ -306,7 +336,9 @@ export default function DashboardView({
     setIsAddServiceOpen(false);
     setFormError("");
     setCreatedService(null);
+    setConnectedRepository(null);
     setDeploymentProvider("NONE");
+    window.history.replaceState(null, "", window.location.pathname);
   }
 
   async function submitServiceEdit(event: FormEvent<HTMLFormElement>) {
@@ -453,7 +485,11 @@ export default function DashboardView({
           </div>
           <button
             type="button"
-            onClick={() => setIsAddServiceOpen(true)}
+            onClick={() => {
+              setConnectedRepository(null);
+              setFormError("");
+              setIsAddServiceOpen(true);
+            }}
             className="inline-flex min-h-8 items-center gap-1.5 self-start rounded border border-[#383730] bg-[#181816] px-2.5 font-mono text-xs text-[#EDEDE8] transition-colors hover:border-[#F59E0B] sm:self-auto"
           >
             <Plus aria-hidden="true" size={13} /> Add Service
@@ -555,7 +591,7 @@ export default function DashboardView({
                         }}
                         className="flex items-center gap-2 rounded px-3 py-2 text-left text-xs text-[#D4D4CE] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8]"
                       >
-                        <Pencil aria-hidden="true" size={14} /> Edit Service Configuration
+                        <Pencil aria-hidden="true" size={14} /> Edit Service
                       </button>
                       <button
                         type="button"
@@ -746,12 +782,14 @@ export default function DashboardView({
               <div>
                 <p className="font-mono text-xs tracking-wider text-[#8A8A82]">SERVICE REGISTRATION</p>
                 <h2 id="add-service-title" className="mt-2 text-xl font-semibold text-[#EDEDE8]">
-                  {createdService ? "Webhook setup" : "Add a service"}
+                  {createdService ? "Webhook setup" : "Add New Service"}
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-[#A1A19A]">
                   {createdService
                     ? `${createdService.name} is registered. Add this endpoint to your alert source.`
-                    : "Connect a GitHub repository and configure optional runtime remediation."}
+                    : connectedRepository
+                      ? "Confirm the repository details and configure optional runtime remediation."
+                      : "Connect your GitHub repository to enable autonomous monitoring."}
                 </p>
               </div>
               <button
@@ -796,24 +834,34 @@ export default function DashboardView({
                   Send a JSON POST with <code className="text-[#D4D4CE]">serviceName</code>, <code className="text-[#D4D4CE]">message</code>, and <code className="text-[#D4D4CE]">stackTrace</code>.
                 </p>
               </div>
+            ) : !connectedRepository ? (
+              <div className="mt-6 flex flex-col gap-4">
+                <p className="text-sm leading-relaxed text-[#A1A19A]">
+                  Healix needs repository permissions to inspect commits, diagnose incidents, and submit verified fix pull requests.
+                </p>
+                {formError && (
+                  <p role="alert" className="rounded border border-rose-800/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
+                    {formError}
+                  </p>
+                )}
+                <a
+                  href="/api/github/install"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded bg-[#F59E0B] px-4 font-mono text-sm font-medium text-black transition-colors hover:bg-[#D97706]"
+                >
+                  Connect GitHub Repository <ExternalLink aria-hidden="true" size={15} />
+                </a>
+              </div>
             ) : (
-              <form className="mt-6 flex flex-col gap-5" onSubmit={submitService}>
+              <form key={`${connectedRepository.installationId}:${connectedRepository.owner}/${connectedRepository.repo}`} className="mt-6 flex flex-col gap-5" onSubmit={submitService}>
+                <input type="hidden" name="githubInstallationId" value={connectedRepository.installationId} />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField label="Service name" name="name" placeholder="e.g. Storefront API" required />
-                  <FormField label="Repository owner" name="repoOwner" placeholder="e.g. acme-corp" required />
-                  <FormField label="Repository name" name="repoName" placeholder="e.g. backend-api" required />
-                  <FormField
-                    label="GitHub personal access token"
-                    name="githubToken"
-                    type="password"
-                    placeholder="Fine-grained GitHub token"
-                    required
-                    helper="Requires Contents: Read & Write and Pull Requests: Read & Write."
-                  />
+                  <FormField label="Service name" name="name" placeholder="Service name" defaultValue={connectedRepository.repo} required />
+                  <FormField label="Repository owner" name="repoOwner" defaultValue={connectedRepository.owner} readOnly required />
+                  <FormField label="Repository name" name="repoName" defaultValue={connectedRepository.repo} readOnly required />
                 </div>
 
                 <div className="grid gap-4 border-t border-[#2B2A24] pt-4 sm:grid-cols-2">
-                  <FormField label="Default branch (optional)" name="defaultBranch" defaultValue="main" />
+                  <FormField label="Default branch" name="defaultBranch" defaultValue={connectedRepository.branch} readOnly required />
                   <FormField label="Deployed URL (optional)" name="deployedUrl" type="url" placeholder="https://api.yourdomain.com" />
                 </div>
 

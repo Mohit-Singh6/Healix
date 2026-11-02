@@ -1,11 +1,11 @@
 import type { IncidentAgentState, IncidentAgentUpdate } from "../state";
-import { Octokit } from "@octokit/rest";
 import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
 import { createHmac } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { decryptProjectSecret } from "../../lib/project-secrets";
+import { createProjectGitHubClient } from "../../lib/github-app";
 import { generateGroqJson } from "../groq";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -38,8 +38,7 @@ export async function executeRemediationNode(
   const project = incidentRecord.project;
   const owner = project.repoOwner;
   const repo = project.repoName;
-  const githubToken = project.githubToken ? decryptProjectSecret(project.githubToken) : null;
-  const octokit = githubToken ? new Octokit({ auth: githubToken }) : null;
+  const octokit = createProjectGitHubClient(project);
 
   // 1. Automated GitHub Revert Flow
   if (state.humanApprovalStatus === "APPROVED" && state.proposedAction === "REVERT_PR") {
@@ -47,7 +46,7 @@ export async function executeRemediationNode(
 
     try {
       if (!targetSha) throw new Error("The incident has no target commit to revert.");
-      if (!octokit) throw new Error("A GitHub token is not configured for this project.");
+      if (!octokit) throw new Error("GitHub credentials are not configured for this project.");
 
       // Fetch default branch
       const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
@@ -164,7 +163,7 @@ export async function executeRemediationNode(
 
     try {
       if (!targetFilePath) throw new Error("The incident has no target source file to patch.");
-      if (!octokit) throw new Error("A GitHub token is not configured for this project.");
+      if (!octokit) throw new Error("GitHub credentials are not configured for this project.");
 
       // 1. Fetch default branch and latest HEAD SHA
       const { data: repoData } = await octokit.rest.repos.get({ owner, repo });

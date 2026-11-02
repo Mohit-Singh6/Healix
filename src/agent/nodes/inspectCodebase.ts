@@ -1,8 +1,7 @@
-import { Octokit } from "@octokit/rest";
 import type { IncidentAgentState, IncidentAgentUpdate, CandidateCommitMeta } from "../state";
 import { fastClassifySuspectFiles } from "../groq";
 import { prisma } from "../../lib/prisma";
-import { decryptProjectSecret } from "../../lib/project-secrets";
+import { createProjectGitHubClient } from "../../lib/github-app";
 
 const SOURCE_EXTENSIONS = new Set([
   "js", "jsx", "ts", "tsx", "mjs", "cjs", "vue", "svelte", "py", "go", "rs", "java",
@@ -122,13 +121,15 @@ export async function inspectCodebaseNode(
   }
 
   const project = incident.project;
-  if (!project.githubToken) {
-    throw new Error(`[Node B] Cannot inspect code for project ${project.name}: no GitHub token is configured.`);
+  if (!project.githubToken && !project.githubInstallationId) {
+    throw new Error(`[Node B] Cannot inspect code for project ${project.name}: no GitHub credentials are configured.`);
   }
 
-  const token = decryptProjectSecret(project.githubToken);
   const { repoOwner: owner, repoName: repo } = project;
-  const octokit = new Octokit({ auth: token });
+  const octokit = createProjectGitHubClient(project);
+  if (!octokit) {
+    throw new Error(`[Node B] Cannot inspect code for project ${project.name}: no GitHub credentials are configured.`);
+  }
   let defaultBranch = project.defaultBranch;
   if (!defaultBranch) {
     const { data: repository } = await octokit.rest.repos.get({ owner, repo });
