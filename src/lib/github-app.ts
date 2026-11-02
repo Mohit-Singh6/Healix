@@ -8,19 +8,18 @@ type ProjectGitHubCredentials = {
 };
 
 function getGitHubAppCredentials() {
-  const appIdValue = process.env.GITHUB_APP_ID;
+  const clientId = process.env.GITHUB_CLIENT_ID;
   const privateKeyValue = process.env.GITHUB_APP_PRIVATE_KEY;
-  const appId = Number(appIdValue);
 
-  if (!appIdValue || !Number.isSafeInteger(appId) || appId <= 0) {
-    throw new Error("GITHUB_APP_ID must be configured as a positive integer.");
+  if (!clientId) {
+    throw new Error("GITHUB_CLIENT_ID must be configured to proceed.");
   }
   if (!privateKeyValue) {
     throw new Error("GITHUB_APP_PRIVATE_KEY is not configured.");
   }
 
   return {
-    appId,
+    clientId: clientId,
     privateKey: privateKeyValue.replace(/\\n/g, "\n"),
   };
 }
