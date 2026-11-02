@@ -5,7 +5,6 @@ import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
 import {
   Activity,
-  ArrowDownRight,
   ArrowRight,
   Ban,
   CheckCircle2,
@@ -13,6 +12,7 @@ import {
   CircleAlert,
   Copy,
   ExternalLink,
+  MoreVertical,
   Pencil,
   Plus,
   Trash2,
@@ -57,6 +57,10 @@ const incidentFilterOptions: { id: IncidentFilter; label: string }[] = [
   { id: "solved", label: "Solved" },
   { id: "dismissed", label: "Dismissed" },
 ];
+
+function incidentFilterCount(incidents: DashboardIncident[], filter: IncidentFilter): number {
+  return incidents.filter((incident) => matchesIncidentFilter(incident.status, filter)).length;
+}
 
 function matchesIncidentFilter(status: IncidentStatus, filter: IncidentFilter): boolean {
   switch (filter) {
@@ -455,7 +459,7 @@ export default function DashboardView({
             <Plus aria-hidden="true" size={13} /> Add Service
           </button>
         </div>
-        <div className="overflow-hidden rounded-lg border border-[#232320] bg-[#181816]">
+        <div className="rounded-lg border border-[#232320] bg-[#181816]">
           <div className="hidden grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_repeat(3,minmax(100px,.65fr))_minmax(190px,1fr)] items-center gap-4 border-b border-[#2B2A24] bg-[#141412] px-5 py-3 font-mono text-xs uppercase tracking-wider text-[#8E8E86] xl:grid">
             <span>Service / Uptime</span><span>Health</span><span>Branch</span><span>P95 Latency</span><span>Open Incidents</span><span>Actions</span>
           </div>
@@ -514,43 +518,56 @@ export default function DashboardView({
                   <p className="mb-1 font-mono text-xs uppercase tracking-wider text-[#8E8E86] xl:hidden">Open incidents</p>
                   <span className={`font-mono text-sm ${service.incidents > 0 ? "text-[#D4D4CE]" : "text-[#8E8E86]"}`}>{service.incidents}</span>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => void handleCopyWebhook(service)}
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded border border-[#383730] bg-transparent px-2.5 font-mono text-xs text-[#A1A19A] transition-colors hover:border-[#F59E0B]/50 hover:text-[#EDEDE8]"
+                    title="Copy webhook URL"
+                    aria-label={`Copy webhook URL for ${service.name}`}
+                    className="inline-flex items-center justify-center rounded border border-[#2B2A24] p-2 text-[#8E8E86] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8]"
                   >
-                    <Copy aria-hidden="true" size={14} /> Webhook
+                    <Copy aria-hidden="true" size={16} />
                   </button>
                   <a
                     href={`https://github.com/${service.repoOwner}/${service.repoName}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded border border-transparent px-2.5 font-mono text-xs text-[#A1A19A] transition-colors hover:border-[#383730] hover:text-[#EDEDE8]"
+                    title="Open repository on GitHub"
+                    aria-label={`Open ${service.repoOwner}/${service.repoName} on GitHub`}
+                    className="inline-flex items-center justify-center rounded border border-[#2B2A24] p-2 text-[#8E8E86] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8]"
                   >
-                    <ExternalLink aria-hidden="true" size={14} /> GitHub
+                    <ExternalLink aria-hidden="true" size={16} />
                   </a>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setServiceError("");
-                      setEditingService(service);
-                    }}
-                    aria-label={`Edit ${service.name}`}
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded border border-transparent px-2.5 font-mono text-xs text-[#A1A19A] transition-colors hover:border-[#383730] hover:text-[#EDEDE8]"
-                  >
-                    <Pencil aria-hidden="true" size={14} /> Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteService(service)}
-                    disabled={isDeletingService === service.id}
-                    aria-label={`Delete ${service.name}`}
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded border border-transparent px-2.5 font-mono text-xs text-[#A1A19A] transition-colors hover:border-rose-900/50 hover:text-rose-300 disabled:opacity-50"
-                  >
-                    <Trash2 aria-hidden="true" size={14} />
-                    {isDeletingService === service.id ? "Deleting…" : "Delete"}
-                  </button>
+                  <details className="group relative">
+                    <summary
+                      aria-label={`More actions for ${service.name}`}
+                      title="More actions"
+                      className="flex cursor-pointer list-none items-center justify-center rounded border border-[#2B2A24] p-2 text-[#8E8E86] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8] [&::-webkit-details-marker]:hidden"
+                    >
+                      <MoreVertical aria-hidden="true" size={16} />
+                    </summary>
+                    <div className="absolute right-0 top-full z-20 mt-1 flex min-w-52 flex-col rounded-md border border-[#2B2A24] bg-[#181816] p-1 shadow-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setServiceError("");
+                          setEditingService(service);
+                        }}
+                        className="flex items-center gap-2 rounded px-3 py-2 text-left text-xs text-[#D4D4CE] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8]"
+                      >
+                        <Pencil aria-hidden="true" size={14} /> Edit Service Configuration
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteService(service)}
+                        disabled={isDeletingService === service.id}
+                        className="flex items-center gap-2 rounded px-3 py-2 text-left text-xs text-rose-400 transition-colors hover:bg-rose-950/30 disabled:opacity-50"
+                      >
+                        <Trash2 aria-hidden="true" size={14} />
+                        {isDeletingService === service.id ? "Deleting…" : "Delete Service"}
+                      </button>
+                    </div>
+                  </details>
                 </div>
               </article>
             ))}
@@ -582,32 +599,53 @@ export default function DashboardView({
             <CircleAlert aria-hidden="true" size={15} /> {activeIncidents} active incidents
           </span>
         </div>
-        {view === "incidents" && <fieldset className="mb-4 rounded-lg border border-[#2B2A24] bg-[#181816] px-4 py-3">
-          <legend className="px-1 font-mono text-xs uppercase tracking-wider text-[#8E8E86]">Filter incidents</legend>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {incidentFilterOptions.map((option) => (
-              <label key={option.id} className="inline-flex cursor-pointer items-center gap-2 text-sm text-[#D4D4CE]">
-                <input
-                  type="checkbox"
-                  checked={selectedIncidentFilters.includes(option.id)}
-                  onChange={() => toggleIncidentFilter(option.id)}
-                  className="accent-[#F59E0B]"
-                />
-                {option.label}
-              </label>
-            ))}
-            <button
-              type="button"
-              onClick={() => setSelectedIncidentFilters([])}
-              disabled={selectedIncidentFilters.length === 0}
-              className="ml-auto font-mono text-xs text-[#F59E0B] transition-colors hover:text-[#FDBA32] disabled:cursor-not-allowed disabled:text-[#66665F]"
-            >
-              Clear filters
-            </button>
+        {view === "incidents" && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-[#262520] py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                aria-pressed={selectedIncidentFilters.length === 0}
+                onClick={() => setSelectedIncidentFilters([])}
+                className={`rounded-full border px-3 py-1.5 font-mono text-xs font-medium transition-colors ${
+                  selectedIncidentFilters.length === 0
+                    ? "border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#F59E0B]"
+                    : "border-[#2B2A24] bg-[#181816] text-[#8E8E86] hover:bg-[#20201D] hover:text-[#EDEDE8]"
+                }`}
+              >
+                All ({visibleIncidents.length})
+              </button>
+              {incidentFilterOptions.map((option) => {
+                const isActive = selectedIncidentFilters.includes(option.id);
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => toggleIncidentFilter(option.id)}
+                    className={`rounded-full border px-3 py-1.5 font-mono text-xs font-medium transition-colors ${
+                      isActive
+                        ? "border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#F59E0B]"
+                        : "border-[#2B2A24] bg-[#181816] text-[#8E8E86] hover:bg-[#20201D] hover:text-[#EDEDE8]"
+                    }`}
+                  >
+                    {option.label} ({incidentFilterCount(visibleIncidents, option.id)})
+                  </button>
+                );
+              })}
+            </div>
+            {selectedIncidentFilters.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIncidentFilters([])}
+                className="font-mono text-xs text-[#8E8E86] underline transition-colors hover:text-[#EDEDE8]"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
-        </fieldset>}
+        )}
         {incidentDeleteError && <p role="alert" className="mb-3 rounded border border-rose-900/50 bg-rose-950/20 px-3 py-2 text-sm text-rose-300">{incidentDeleteError}</p>}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col">
           {visibleIncidents.length === 0 && (
             <div className="rounded-lg border border-[#232320] bg-[#181816] px-5 py-8 text-center">
               <p className="font-mono text-sm text-[#D4D4CE]">No incidents recorded</p>
@@ -627,63 +665,58 @@ export default function DashboardView({
             return (
               <article
                 key={incident.id}
-                className={`relative overflow-hidden rounded-lg border bg-[#181816] px-3 py-3 transition-colors sm:px-4 ${
-                  incident.status === "PENDING_APPROVAL" ? "border-amber-500/40 hover:border-amber-500/70" : "border-[#232320] hover:border-[#383730]"
-                }`}
+                className="group mb-3 flex flex-col justify-between gap-4 rounded-lg border border-[#262520] bg-[#181816] p-5 transition-all hover:border-[#383730] hover:bg-[#1C1C19] md:flex-row md:items-center"
               >
-                <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge tone={incident.severity === "CRITICAL" ? "critical" : incident.severity === "HIGH" ? "high" : "muted"}>
-                        {incident.severity === "CRITICAL" ? <CircleAlert aria-hidden="true" size={14} /> : <ArrowDownRight aria-hidden="true" size={14} />}
-                        {incident.severity}
-                      </StatusBadge>
-                      <span className="font-mono text-sm font-semibold text-[#EDEDE8]">{incident.displayId}</span>
-                      <StatusBadge tone={outcome.tone}>
-                        {outcome.icon}
-                        {outcome.label}
-                      </StatusBadge>
-                      {incident.status === "PENDING_APPROVAL" && (
-                        <span className="font-mono text-xs text-amber-400">{outcome.detail}</span>
-                      )}
-                      <span className="rounded border border-[#2B2A24] bg-[#141412] px-2 py-0.5 font-mono text-xs text-[#A1A19A]">{incident.service}</span>
-                    </div>
-                    <p className="mt-1.5 truncate font-mono text-sm leading-relaxed text-[#D4D4CE]" title={incident.signature}>{incident.signature}</p>
-                    <p className="mt-0.5 truncate font-mono text-xs text-[#8E8E86]">{incident.target ?? "Source location unavailable"}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                      <span className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-[#2B2A24] bg-[#141412] px-2.5 font-mono text-xs text-[#A1A19A]">
-                        <Activity aria-hidden="true" size={13} />
-                        {incident.volume} {incident.volume === 1 ? "event" : "events"}
-                      </span>
-                      <time
-                        dateTime={incident.createdAt}
-                        title={formatDateTimeIST(incident.createdAt)}
-                        className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-[#2B2A24] bg-[#141412] px-2.5 font-mono text-xs text-[#A1A19A]"
-                      >
-                        <Clock3 aria-hidden="true" size={13} />
-                        {formatTimeAgo(incident.createdAt)}
-                      </time>
-                    <Link
-                      href={`/incidents/${incident.id}`}
-                      className={`inline-flex min-h-8 items-center gap-1.5 rounded-md px-2.5 font-mono text-xs transition-colors ${
-                        incident.status === "PENDING_APPROVAL"
-                          ? "bg-[#F59E0B] font-semibold text-black hover:bg-[#D97706]"
-                          : "bg-[#1E1E1B] text-[#D4D4CE] hover:bg-[#282723]"
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      role="img"
+                      aria-label={`${incident.severity} severity`}
+                      className={`size-2 rounded-full ${
+                        incident.severity === "CRITICAL" ? "bg-rose-400" : incident.severity === "HIGH" ? "bg-[#F59E0B]" : "bg-[#77766F]"
                       }`}
-                    >
-                      Investigate <ArrowRight aria-hidden="true" size={14} />
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteIncident(incident)}
-                      disabled={deletingIncidentId === incident.id}
-                      aria-label={`Delete incident ${incident.displayId}`}
-                      className="inline-flex size-8 items-center justify-center rounded border border-[#2B2A24] text-[#A1A19A] transition-colors hover:border-rose-900/50 hover:text-rose-300 disabled:opacity-50"
-                    >
-                      <Trash2 aria-hidden="true" size={14} />
-                    </button>
+                    />
+                    <span className="font-mono text-sm font-bold text-[#EDEDE8]">{incident.displayId}</span>
+                    <span className="rounded border border-[#2B2A24] bg-[#141412] px-2 py-0.5 font-mono text-xs text-[#A1A19A]">{incident.service}</span>
+                    <StatusBadge tone={outcome.tone}>
+                      {outcome.icon}
+                      {incident.status === "PENDING_APPROVAL" ? "Action Required" : outcome.label}
+                    </StatusBadge>
                   </div>
+                  <p className="mt-1 truncate text-sm font-semibold tracking-tight text-[#EDEDE8] md:text-base" title={incident.signature}>
+                    {incident.signature}
+                  </p>
+                  <p className="mt-0.5 truncate font-mono text-xs text-[#8E8E86]">{incident.target ?? "Source location unavailable"}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 md:justify-end">
+                  <span className="flex items-center gap-1 text-xs font-mono text-[#8E8E86]">
+                    <Activity aria-hidden="true" size={14} />
+                    {incident.volume} {incident.volume === 1 ? "event" : "events"}
+                  </span>
+                  <time
+                    dateTime={incident.createdAt}
+                    title={formatDateTimeIST(incident.createdAt)}
+                    className="flex items-center gap-1 text-xs font-mono text-[#8E8E86]"
+                  >
+                    <Clock3 aria-hidden="true" size={14} />
+                    {formatTimeAgo(incident.createdAt)}
+                  </time>
+                  <Link
+                    href={`/incidents/${incident.id}`}
+                    className="flex items-center gap-1.5 rounded bg-[#242420] px-3.5 py-1.5 font-mono text-xs font-medium text-[#EDEDE8] transition-all hover:bg-[#F59E0B] hover:text-black"
+                  >
+                    Investigate <ArrowRight aria-hidden="true" size={14} />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteIncident(incident)}
+                    disabled={deletingIncidentId === incident.id}
+                    aria-label={`Delete incident ${incident.displayId}`}
+                    title={`Delete ${incident.displayId}`}
+                    className="inline-flex size-8 items-center justify-center rounded text-[#6E6E68] opacity-100 transition-opacity hover:text-rose-400 disabled:opacity-50 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                  >
+                    <Trash2 aria-hidden="true" size={16} />
+                  </button>
                 </div>
               </article>
             );
