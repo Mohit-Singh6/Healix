@@ -215,5 +215,7 @@ export async function inspectCodebaseNode(
   }
 
   console.log(`[Node B] Selected ${candidateCommits.length} commits and hydrated ${inspectedFiles.length} source files.`);
+  console.log(`[Node B] Hydrated files: ${inspectedFiles.map((f) => f.path).join(", ")}`);
+  console.log(`[Node B] Candidate commits: ${candidateCommits.map((c) => c.sha.slice(0, 7)).join(", ")}`);
   return { candidateCommits, inspectedFiles };
 }
