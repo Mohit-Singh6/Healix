@@ -12,9 +12,11 @@ import {
   CircleAlert,
   Copy,
   ExternalLink,
+  LoaderCircle,
   MoreVertical,
   Pencil,
   Plus,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -246,6 +248,8 @@ export default function DashboardView({
   const [serviceError, setServiceError] = useState("");
   const [serviceActionMessage, setServiceActionMessage] = useState("");
   const [isDeletingService, setIsDeletingService] = useState<string | null>(null);
+  const [autoPrServiceId, setAutoPrServiceId] = useState<string | null>(null);
+  const [autoPrError, setAutoPrError] = useState("");
   const [visibleIncidents, setVisibleIncidents] = useState(initialIncidents);
   const [selectedIncidentFilters, setSelectedIncidentFilters] = useState<IncidentFilter[]>([]);
   const [deletingIncidentId, setDeletingIncidentId] = useState<string | null>(null);
@@ -255,6 +259,7 @@ export default function DashboardView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState(() => githubErrorMessage(initialGitHubError));
   const [deploymentProvider, setDeploymentProvider] = useState<DeploymentProvider>("NONE");
+  const [editingDeploymentProvider, setEditingDeploymentProvider] = useState<DeploymentProvider>("NONE");
   const [createdService, setCreatedService] = useState<{ name: string; webhookUrl: string } | null>(null);
   const [connectedRepository, setConnectedRepository] = useState<ConnectedRepository | null>(null);
 
@@ -323,6 +328,36 @@ export default function DashboardView({
     } catch (error) {
       console.error("Unable to copy the ingestion webhook URL.", error);
       setCopyMessage(error instanceof Error ? error.message : "Could not copy webhook URL.");
+    }
+  }
+
+  async function handleAutoPr(service: ServiceRow) {
+    if (autoPrServiceId) return;
+    setAutoPrServiceId(service.id);
+    setAutoPrError("");
+    setServiceActionMessage("");
+    try {
+      const response = await fetch(`/api/services/${encodeURIComponent(service.id)}/auto-instrument`, {
+        method: "POST",
+      });
+      const result = await response.json() as { success?: boolean; prUrl?: string; error?: string };
+      if (!response.ok || !result.success || !result.prUrl) {
+        throw new Error(result.error ?? "Could not create the pull request. Try again.");
+      }
+
+      setServices((current) =>
+        current.map((item) =>
+          item.id === service.id
+            ? { ...item, errorTrackingPrUrl: result.prUrl ?? null, errorTrackingPrStatus: "OPEN" }
+            : item,
+        ),
+      );
+      setServiceActionMessage(`${service.name} error-tracking pull request is ready.`);
+    } catch (error) {
+      console.error("Automatic error-tracking setup failed.", error);
+      setAutoPrError(error instanceof Error ? error.message : "Could not create the pull request. Try again.");
+    } finally {
+      setAutoPrServiceId(null);
     }
   }
 
@@ -491,7 +526,7 @@ export default function DashboardView({
           </button>
         </div>
         <div className="rounded-lg border border-[#232320] bg-[#181816]">
-          <div className="hidden grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_repeat(3,minmax(100px,.65fr))_minmax(190px,1fr)] items-center gap-4 border-b border-[#2B2A24] bg-[#141412] px-5 py-3 font-mono text-xs uppercase tracking-wider text-[#8E8E86] xl:grid">
+          <div className="hidden grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_repeat(3,minmax(100px,.65fr))_minmax(220px,1fr)] items-center gap-4 border-b border-[#2B2A24] bg-[#141412] px-5 py-3 font-mono text-xs uppercase tracking-wider text-[#8E8E86] xl:grid">
             <span>Service / Uptime</span><span>Health</span><span>Branch</span><span>P95 Latency</span><span>Open Incidents</span><span>Actions</span>
           </div>
           <div className="divide-y divide-[#262520]">
@@ -504,7 +539,7 @@ export default function DashboardView({
             {displayedServices.map((service) => (
               <article
                 key={service.id}
-                className="grid gap-4 px-4 py-4 transition-colors hover:bg-[#1D1D19] sm:px-5 xl:grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_repeat(3,minmax(100px,.65fr))_minmax(190px,1fr)] xl:items-center"
+                className="grid gap-4 px-4 py-4 transition-colors hover:bg-[#1D1D19] sm:px-5 xl:grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_repeat(3,minmax(100px,.65fr))_minmax(220px,1fr)] xl:items-center"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -550,6 +585,31 @@ export default function DashboardView({
                   <span className={`font-mono text-sm ${service.incidents > 0 ? "text-[#D4D4CE]" : "text-[#8E8E86]"}`}>{service.incidents}</span>
                 </div>
                 <div className="flex items-center justify-end gap-2">
+                  {service.errorTrackingPrUrl ? (
+                    <a
+                      href={service.errorTrackingPrUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="View error-tracking pull request"
+                      aria-label={`View error-tracking pull request for ${service.name}`}
+                      className="inline-flex items-center justify-center gap-1.5 rounded border border-[#2B2A24] px-2 py-2 font-mono text-xs text-emerald-400 transition-colors hover:bg-[#232320] hover:text-emerald-300"
+                    >
+                      <ExternalLink aria-hidden="true" size={14} /> View PR
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleAutoPr(service)}
+                      disabled={autoPrServiceId === service.id}
+                      title="Generate error-tracking pull request"
+                      aria-label={`Generate error-tracking pull request for ${service.name}`}
+                      className="inline-flex items-center justify-center gap-1.5 rounded border border-[#2B2A24] px-2 py-2 font-mono text-xs text-[#8E8E86] transition-colors hover:bg-[#232320] hover:text-[#F59E0B] disabled:cursor-wait disabled:opacity-50"
+                    >
+                      {autoPrServiceId === service.id
+                        ? <><LoaderCircle aria-hidden="true" className="animate-spin" size={14} /> Creating</>
+                        : <><Sparkles aria-hidden="true" size={14} /> Auto PR</>}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => void handleCopyWebhook(service)}
@@ -582,6 +642,7 @@ export default function DashboardView({
                         type="button"
                         onClick={() => {
                           setServiceError("");
+                          setEditingDeploymentProvider(service.deploymentProvider);
                           setEditingService(service);
                         }}
                         className="flex items-center gap-2 rounded px-3 py-2 text-left text-xs text-[#D4D4CE] transition-colors hover:bg-[#232320] hover:text-[#EDEDE8]"
@@ -614,6 +675,7 @@ export default function DashboardView({
         <p aria-live="polite" className="mt-2 min-h-4 font-mono text-xs text-[#8A8A82]">{copyMessage}</p>
         {serviceActionMessage && <p aria-live="polite" className="mt-1 font-mono text-xs text-emerald-400">{serviceActionMessage}</p>}
         {serviceError && <p role="alert" className="mt-2 font-mono text-xs text-rose-300">{serviceError}</p>}
+        {autoPrError && <p role="alert" className="mt-2 font-mono text-xs text-rose-300">{autoPrError}</p>}
       </section>
       )}
 
@@ -961,19 +1023,22 @@ export default function DashboardView({
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-service-title"
-            className="w-full max-w-xl rounded-lg border border-[#2B2A24] bg-[#181816] p-6 shadow-2xl"
+            className="hide-scrollbar max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-lg border border-[#2B2A24] bg-[#181816] p-6 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-mono text-xs tracking-wider text-[#8A8A82]">SERVICE SETTINGS</p>
                 <h2 id="edit-service-title" className="mt-2 text-xl font-semibold text-[#EDEDE8]">Edit service</h2>
                 <p className="mt-2 text-sm leading-relaxed text-[#A1A19A]">
-                  Stored credentials stay unchanged unless you provide a new GitHub access token.
+                  Repository details stay connected to the selected GitHub repository. Leave a saved provider key blank to keep it unchanged.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setEditingService(null)}
+                onClick={() => {
+                  setEditingService(null);
+                  setServiceError("");
+                }}
                 disabled={isUpdatingService}
                 aria-label="Close dialog"
                 className="flex size-8 shrink-0 items-center justify-center rounded border border-[#383730] text-[#A1A19A] transition-colors hover:text-[#EDEDE8]"
@@ -981,20 +1046,117 @@ export default function DashboardView({
                 <X aria-hidden="true" size={16} />
               </button>
             </div>
-            <form className="mt-6 flex flex-col gap-4" onSubmit={submitServiceEdit}>
-              <FormField label="Service name" name="name" defaultValue={editingService.name} required />
+            <form className="mt-6 flex flex-col gap-5" onSubmit={submitServiceEdit}>
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField label="Repository owner" name="repoOwner" defaultValue={editingService.repoOwner} required />
-                <FormField label="Repository name" name="repoName" defaultValue={editingService.repoName} required />
-                <FormField label="Default branch" name="defaultBranch" defaultValue={editingService.defaultBranch} required />
-                <FormField label="Deployed URL (optional)" name="deployedUrl" type="url" defaultValue={editingService.deployedUrl ?? ""} />
-                <FormField
-                  label="New GitHub access token (optional)"
-                  name="githubToken"
-                  type="password"
-                  placeholder="Leave blank to keep the current token"
-                />
+                <FormField label="Service name" name="name" defaultValue={editingService.name} required />
+                <FormField label="Repository owner" name="repoOwner" defaultValue={editingService.repoOwner} readOnly required />
+                <FormField label="Repository name" name="repoName" defaultValue={editingService.repoName} readOnly required />
+                <FormField label="Default branch" name="defaultBranch" defaultValue={editingService.defaultBranch} readOnly required />
               </div>
+
+              <div className="grid gap-4 border-t border-[#2B2A24] pt-4 sm:grid-cols-2">
+                <FormField
+                  label="Deployed URL (optional)"
+                  name="deployedUrl"
+                  type="url"
+                  placeholder="https://api.yourdomain.com"
+                  defaultValue={editingService.deployedUrl ?? ""}
+                />
+                <label className="flex flex-col gap-1.5 text-sm text-[#D4D4CE]">
+                  Runtime configuration provider (optional)
+                  <select
+                    name="deploymentProvider"
+                    value={editingDeploymentProvider}
+                    onChange={(event) => setEditingDeploymentProvider(event.target.value as DeploymentProvider)}
+                    className={fieldClassName}
+                  >
+                    <option value="NONE">None</option>
+                    <option value="VERCEL">Vercel</option>
+                    <option value="RENDER">Render</option>
+                    <option value="CUSTOM">Custom webhook</option>
+                  </select>
+                </label>
+              </div>
+
+              {editingDeploymentProvider === "NONE" && (
+                <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+                  Healix will handle automated code fixes and revert PRs on GitHub. Automated runtime configuration patching will be skipped.
+                </p>
+              )}
+              {editingDeploymentProvider === "VERCEL" && (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      label="Vercel resource ID"
+                      name="platformServiceId"
+                      placeholder="prj_xxxxxxxxxxxxxxxxxxxx"
+                      defaultValue={editingService.deploymentProvider === "VERCEL" ? editingService.platformServiceId ?? "" : ""}
+                      required
+                      helper="Found in Vercel resource settings → General."
+                    />
+                    <FormField
+                      label="Vercel Access Token"
+                      name="platformApiToken"
+                      type="password"
+                      placeholder={editingService.hasPlatformApiToken && editingService.deploymentProvider === "VERCEL" ? "Leave blank to keep the saved token" : "Vercel personal access token"}
+                      required={!editingService.hasPlatformApiToken || editingService.deploymentProvider !== "VERCEL"}
+                      helper="Generated under Vercel Account Settings → Tokens."
+                    />
+                    <FormField
+                      label="Vercel Team ID (optional)"
+                      name="platformTeamId"
+                      placeholder="team_xxxxxxxxxxxxxxxxxxxx"
+                      defaultValue={editingService.deploymentProvider === "VERCEL" ? editingService.platformTeamId ?? "" : ""}
+                      helper="Leave blank for a personal account."
+                    />
+                  </div>
+                  <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+                    Healix will use this Vercel connection only for approved runtime configuration patches.
+                  </p>
+                </>
+              )}
+              {editingDeploymentProvider === "RENDER" && (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      label="Render Service ID"
+                      name="platformServiceId"
+                      placeholder="srv-xxxxxxxxxxxxxxxxxxxx"
+                      defaultValue={editingService.deploymentProvider === "RENDER" ? editingService.platformServiceId ?? "" : ""}
+                      required
+                      helper="Found in the URL of your Render service dashboard."
+                    />
+                    <FormField
+                      label="Render API Key"
+                      name="platformApiToken"
+                      type="password"
+                      placeholder={editingService.hasPlatformApiToken && editingService.deploymentProvider === "RENDER" ? "Leave blank to keep the saved key" : "Render API key"}
+                      required={!editingService.hasPlatformApiToken || editingService.deploymentProvider !== "RENDER"}
+                      helper="Generated under Render Account Settings → API Keys."
+                    />
+                  </div>
+                  <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+                    Healix will use this Render connection only for approved runtime configuration patches.
+                  </p>
+                </>
+              )}
+              {editingDeploymentProvider === "CUSTOM" && (
+                <>
+                  <p className="rounded border border-[#2B2A24] bg-[#121211] px-3 py-2 text-sm leading-relaxed text-[#A1A19A]">
+                    Healix will send signed requests to this endpoint when approved runtime configuration patches are needed.
+                  </p>
+                  <FormField
+                    label="Custom webhook URL"
+                    name="customWebhookUrl"
+                    type="url"
+                    placeholder="https://infra.yourcompany.com/api/healix-patch"
+                    defaultValue={editingService.deploymentProvider === "CUSTOM" ? editingService.customWebhookUrl ?? "" : ""}
+                    required
+                    helper="Requests include configKey and configValue and use an HMAC-SHA256 signature."
+                  />
+                </>
+              )}
+
               {serviceError && (
                 <p role="alert" className="rounded border border-rose-800/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
                   {serviceError}

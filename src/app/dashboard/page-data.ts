@@ -24,6 +24,14 @@ export async function getDashboardData() {
         repoName: true,
         defaultBranch: true,
         deployedUrl: true,
+        githubInstallationId: true,
+        deploymentProvider: true,
+        platformServiceId: true,
+        platformApiToken: true,
+        platformTeamId: true,
+        customWebhookUrl: true,
+        errorTrackingPrUrl: true,
+        errorTrackingPrStatus: true,
       },
     }),
     prisma.project.findMany({
@@ -47,7 +55,13 @@ export async function getDashboardData() {
   ]);
 
   return {
-    initialServices: services,
+    initialServices: services.map((service) => {
+      const { platformApiToken, ...safeService } = service;
+      return {
+        ...safeService,
+        hasPlatformApiToken: Boolean(platformApiToken),
+      };
+    }),
     githubInstallationIds: installationRows.flatMap((service) =>
       service.githubInstallationId ? [service.githubInstallationId] : [],
     ),

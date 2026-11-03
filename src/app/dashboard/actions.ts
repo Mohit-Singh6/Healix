@@ -70,6 +70,14 @@ export type DashboardService = {
   repoName: string;
   defaultBranch: string;
   deployedUrl: string | null;
+  githubInstallationId: string | null;
+  deploymentProvider: "NONE" | "VERCEL" | "RENDER" | "CUSTOM";
+  platformServiceId: string | null;
+  hasPlatformApiToken: boolean;
+  platformTeamId: string | null;
+  customWebhookUrl: string | null;
+  errorTrackingPrUrl: string | null;
+  errorTrackingPrStatus: string | null;
 };
 
 export type UpdateServiceResult =
@@ -184,6 +192,12 @@ export async function createService(formData: FormData): Promise<CreateServiceRe
         repoName: true,
         defaultBranch: true,
         deployedUrl: true,
+        githubInstallationId: true,
+        deploymentProvider: true,
+        platformServiceId: true,
+        platformApiToken: true,
+        platformTeamId: true,
+        customWebhookUrl: true,
         apiKey: true,
       },
     });
@@ -211,6 +225,14 @@ export async function createService(formData: FormData): Promise<CreateServiceRe
         repoName: service.repoName,
         defaultBranch: service.defaultBranch,
         deployedUrl: service.deployedUrl,
+        githubInstallationId: service.githubInstallationId,
+        deploymentProvider: service.deploymentProvider,
+        platformServiceId: service.platformServiceId,
+        hasPlatformApiToken: Boolean(service.platformApiToken),
+        platformTeamId: service.platformTeamId,
+        customWebhookUrl: service.customWebhookUrl,
+        errorTrackingPrUrl: null,
+        errorTrackingPrStatus: null,
       },
       webhookUrl: `/api/incidents/webhook?apiKey=${encodeURIComponent(service.apiKey)}`,
     };
@@ -226,7 +248,11 @@ const serviceUpdateSchema = z.object({
   repoName: z.string().trim().min(1, "Enter the repository name.").max(100).regex(/^[A-Za-z0-9_.-]+$/, "Use a valid GitHub repository name."),
   defaultBranch: z.string().trim().min(1, "Enter a default branch.").max(255),
   deployedUrl: optionalUrl,
-  githubToken: optionalSecret,
+  deploymentProvider: z.enum(["NONE", "VERCEL", "RENDER", "CUSTOM"]),
+  platformServiceId: optionalText,
+  platformApiToken: optionalSecret,
+  platformTeamId: optionalText,
+  customWebhookUrl: optionalUrl,
 });
 
 export async function updateService(serviceId: string, formData: FormData): Promise<UpdateServiceResult> {
@@ -239,7 +265,11 @@ export async function updateService(serviceId: string, formData: FormData): Prom
     repoName: readFormString(formData, "repoName"),
     defaultBranch: readFormString(formData, "defaultBranch"),
     deployedUrl: readFormString(formData, "deployedUrl"),
-    githubToken: readFormString(formData, "githubToken"),
+    deploymentProvider: readFormString(formData, "deploymentProvider"),
+    platformServiceId: readFormString(formData, "platformServiceId"),
+    platformApiToken: readFormString(formData, "platformApiToken"),
+    platformTeamId: readFormString(formData, "platformTeamId"),
+    customWebhookUrl: readFormString(formData, "customWebhookUrl"),
   });
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Check the service details and try again." };
@@ -248,15 +278,29 @@ export async function updateService(serviceId: string, formData: FormData): Prom
   try {
     const existingService = await prisma.project.findFirst({
       where: { id: serviceId, user: { email } },
-      select: { id: true, repoOwner: true, repoName: true },
+      select: {
+        id: true,
+        repoOwner: true,
+        repoName: true,
+        deploymentProvider: true,
+        platformApiToken: true,
+      },
     });
     if (!existingService) return { success: false, error: "Service not found in your workspace." };
 
-    const repositoryChanged =
-      existingService.repoOwner.toLowerCase() !== parsed.data.repoOwner.toLowerCase() ||
-      existingService.repoName.toLowerCase() !== parsed.data.repoName.toLowerCase();
-    if (repositoryChanged && !parsed.data.githubToken) {
-      return { success: false, error: "Provide a GitHub access token when changing the connected repository." };
+    const usesPlatformCredentials =
+      parsed.data.deploymentProvider === "VERCEL" || parsed.data.deploymentProvider === "RENDER";
+    const canReusePlatformToken =
+      parsed.data.deploymentProvider === existingService.deploymentProvider &&
+      Boolean(existingService.platformApiToken);
+    if (usesPlatformCredentials && !parsed.data.platformApiToken && !canReusePlatformToken) {
+      return { success: false, error: `Enter the ${parsed.data.deploymentProvider === "VERCEL" ? "Vercel access token" : "Render API key"}.` };
+    }
+    if (usesPlatformCredentials && !parsed.data.platformServiceId) {
+      return { success: false, error: "Enter the deployment provider service ID." };
+    }
+    if (parsed.data.deploymentProvider === "CUSTOM" && !parsed.data.customWebhookUrl) {
+      return { success: false, error: "Enter the custom webhook URL." };
     }
 
     const duplicateRepository = await prisma.project.findFirst({
@@ -275,9 +319,17 @@ export async function updateService(serviceId: string, formData: FormData): Prom
     const service = await prisma.project.update({
       where: { id: serviceId },
       data: {
-        ...parsed.data,
+        name: parsed.data.name,
         deployedUrl: parsed.data.deployedUrl ?? null,
-        githubToken: parsed.data.githubToken ? encryptProjectSecret(parsed.data.githubToken) : undefined,
+        deploymentProvider: parsed.data.deploymentProvider,
+        platformServiceId: usesPlatformCredentials ? parsed.data.platformServiceId : null,
+        platformApiToken: usesPlatformCredentials
+          ? parsed.data.platformApiToken
+            ? encryptProjectSecret(parsed.data.platformApiToken)
+            : undefined
+          : null,
+        platformTeamId: parsed.data.deploymentProvider === "VERCEL" ? parsed.data.platformTeamId ?? null : null,
+        customWebhookUrl: parsed.data.deploymentProvider === "CUSTOM" ? parsed.data.customWebhookUrl ?? null : null,
       },
       select: {
         id: true,
@@ -286,11 +338,26 @@ export async function updateService(serviceId: string, formData: FormData): Prom
         repoName: true,
         defaultBranch: true,
         deployedUrl: true,
+        githubInstallationId: true,
+        deploymentProvider: true,
+        platformServiceId: true,
+        platformTeamId: true,
+        customWebhookUrl: true,
+        errorTrackingPrUrl: true,
+        errorTrackingPrStatus: true,
       },
     });
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/services");
-    return { success: true, service };
+    return {
+      success: true,
+      service: {
+        ...service,
+        hasPlatformApiToken: usesPlatformCredentials && (
+          Boolean(parsed.data.platformApiToken) || canReusePlatformToken
+        ),
+      },
+    };
   } catch (error) {
     console.error(`Service ${serviceId} could not be updated.`, error);
     return { success: false, error: "Unable to update this service. Please try again." };
