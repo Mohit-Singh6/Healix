@@ -80,7 +80,7 @@ function InternalLinks({ pathname }: { pathname: string }) {
     { label: "War Room", href: "/dashboard", active: pathname === "/dashboard" },
     { label: "Incidents", href: "/incidents", active: pathname === "/incidents" || pathname.startsWith("/incidents/") || pathname === "/dashboard/incidents" },
     { label: "Services", href: "/services", active: pathname === "/services" || pathname === "/dashboard/services" },
-    { label: "Docs", href: "/#architecture", active: false },
+    { label: "Docs", href: "/docs", active: pathname.startsWith("/docs") },
   ];
 
   return (
@@ -125,7 +125,7 @@ export default function Navbar({ user }: { user: NavbarUser | null }) {
           </div>
         ) : pathname === "/auth" ? null : (
           <div className="ml-auto flex items-center gap-5">
-            <Link href="/#architecture" className="font-mono text-sm text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
+            <Link href="/docs" className="font-mono text-sm text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
               Docs
             </Link>
             <Link href="/#contact" className="font-mono text-sm text-[#8A8A82] transition-colors hover:text-[#EDEDE8]">
