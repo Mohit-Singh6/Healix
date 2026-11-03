@@ -96,7 +96,12 @@ function actionSummary(
     case "MANUAL_INTERVENTION":
       return "Manual intervention recommended";
     case "NO_ACTION":
-      return "No automated remediation recommended";
+      if (getString(payload, "noFixExplanation")) {
+        return `No action required: ${getString(payload, "noFixExplanation")}`;
+      }
+      return `No automated remediation recommended${
+        getString(payload, "noFixReason") ? ` (${getString(payload, "noFixReason")})` : ""
+      }`;
     default:
       return null;
   }

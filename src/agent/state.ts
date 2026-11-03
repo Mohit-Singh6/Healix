@@ -60,6 +60,13 @@ export const ActionPayloadSchema = z.object({
   suspectCommitAuthor: z.string().optional(),
   suspectCommitMessage: z.string().optional(),
   suspectCommitDate: z.string().optional(),
+  noFixReason: z.enum([
+    "TEST_ERROR",
+    "EXTERNAL_DEPENDENCY",
+    "EXPECTED_BEHAVIOR",
+    "INSUFFICIENT_CONTEXT",
+  ]).optional(),
+  noFixExplanation: z.string().optional(),
   configKey: z.string().optional(),
   configValue: z.string().optional(),
   targetFilePath: z.string().optional(),

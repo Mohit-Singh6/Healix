@@ -139,9 +139,8 @@ export default function DocsPageFrame({
     <div className="min-h-[calc(100vh-3.5rem)] bg-[#0A0A0A] text-[#EDEDE8]">
       <div className="mx-auto grid max-w-[1440px] grid-cols-1 gap-0 px-4 sm:px-6 lg:grid-cols-[230px_minmax(0,1fr)_220px] lg:gap-10 xl:grid-cols-[250px_minmax(0,1fr)_230px] xl:gap-14">
         <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] overflow-y-auto border-r border-[#22221F] py-8 pr-4 lg:block">
-          <Link href="/docs" className="mb-7 inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-[#EDEDE8]">
-            <span className="size-2 rounded-full bg-[#F59E0B]" />
-            Healix Documentation
+          <Link href="/docs" className="mb-7 inline-flex items-center gap-2 text-lg font-semibold tracking-tight text-[#EDEDE8]">
+            Healix Docs
           </Link>
           <NavigationLinks activePath={pathname} />
         </aside>

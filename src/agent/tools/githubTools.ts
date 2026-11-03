@@ -1,10 +1,11 @@
 import { Type } from "@google/genai";
 import type { FunctionDeclaration } from "@google/genai";
 import type { Octokit } from "@octokit/rest";
+import type { InspectedFile } from "../state";
 
 export const readFileDeclaration: FunctionDeclaration = {
   name: "read_file_content",
-  description: "Fetches and reads the complete, decoded UTF-8 source code of a specified repository file on the active branch.",
+  description: "Reads a repository source file. Files hydrated in the provided incident context are returned from cache; use this only when a needed file is not already hydrated.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -67,8 +68,9 @@ export async function executeGithubTool(params: {
   owner: string;
   repo: string;
   ref: string;
+  hydratedFiles?: readonly InspectedFile[];
 }): Promise<string> {
-  const { toolName, args, octokit, owner, repo, ref } = params;
+  const { toolName, args, octokit, owner, repo, ref, hydratedFiles = [] } = params;
 
   if (toolName === "read_file_content") {
     const rawPath = args.filePath;
@@ -81,6 +83,34 @@ export async function executeGithubTool(params: {
       filePath = normalizeRepositoryPath(rawPath);
     } catch (error) {
       return `Error: ${error instanceof Error ? error.message : "Invalid repository path."}`;
+    }
+
+    const hydratedFile = hydratedFiles.find((file) => {
+      try {
+        return normalizeRepositoryPath(file.path) === filePath;
+      } catch {
+        return false;
+      }
+    });
+    if (hydratedFile) {
+      const startLine = args.startLine;
+      const endLine = args.endLine;
+      if (typeof startLine === "number" && typeof endLine === "number") {
+        if (
+          !Number.isInteger(startLine) ||
+          !Number.isInteger(endLine) ||
+          startLine < 1 ||
+          endLine < startLine
+        ) {
+          return "Error: startLine and endLine must be valid 1-based line numbers.";
+        }
+        return hydratedFile.content
+          .split(/\r?\n/)
+          .slice(startLine - 1, endLine)
+          .map((line, index) => `${startLine + index}: ${line}`)
+          .join("\n");
+      }
+      return hydratedFile.content;
     }
 
     try {
