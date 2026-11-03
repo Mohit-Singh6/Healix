@@ -602,22 +602,23 @@ export default function DashboardView({
                       rel="noopener noreferrer"
                       title="View error-tracking pull request"
                       aria-label={`View error-tracking pull request for ${service.name}`}
-                      className="inline-flex items-center justify-center gap-1.5 rounded border border-[#2B2A24] px-2 py-2 font-mono text-xs text-emerald-400 transition-colors hover:bg-[#232320] hover:text-emerald-300"
+                      className="inline-flex items-center justify-center rounded border border-[#2B2A24] p-2 text-emerald-400 transition-colors hover:bg-[#232320] hover:text-emerald-300"
                     >
-                      <ExternalLink aria-hidden="true" size={14} /> View PR
+                      <ExternalLink aria-hidden="true" size={16} />
                     </a>
-                  ) : (
+                  ) : ["OPEN", "MERGED", "COMPLETED"].includes(service.errorTrackingPrStatus ?? "") ? null : (
                     <button
                       type="button"
                       onClick={() => void handleAutoPr(service)}
                       disabled={autoPrServiceId === service.id}
-                      title="Generate error-tracking pull request"
-                      aria-label={`Generate error-tracking pull request for ${service.name}`}
-                      className="inline-flex items-center justify-center gap-1.5 rounded border border-[#2B2A24] px-2 py-2 font-mono text-xs text-[#8E8E86] transition-colors hover:bg-[#232320] hover:text-[#F59E0B] disabled:cursor-wait disabled:opacity-50"
+                      title={autoPrServiceId === service.id ? "Creating error-tracking pull request" : "Generate error-tracking pull request"}
+                      aria-label={`${autoPrServiceId === service.id ? "Creating" : "Generate"} error-tracking pull request for ${service.name}`}
+                      aria-busy={autoPrServiceId === service.id}
+                      className="inline-flex items-center justify-center rounded border border-[#2B2A24] p-2 text-[#8E8E86] transition-colors hover:bg-[#232320] hover:text-[#F59E0B] disabled:cursor-wait disabled:opacity-50"
                     >
                       {autoPrServiceId === service.id
-                        ? <><LoaderCircle aria-hidden="true" className="animate-spin" size={14} /> Creating</>
-                        : <><Sparkles aria-hidden="true" size={14} /> Auto PR</>}
+                        ? <LoaderCircle aria-hidden="true" className="animate-spin" size={16} />
+                        : <Sparkles aria-hidden="true" size={16} />}
                     </button>
                   )}
                   <button

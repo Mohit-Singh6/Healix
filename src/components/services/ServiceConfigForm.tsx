@@ -216,9 +216,14 @@ export default function ServiceConfigForm({
           </div>
         )}
         {formError && <p role="alert" className="mt-3 text-sm text-rose-300">{formError}</p>}
-        <Link href="/services" className="ml-4 font-mono text-sm text-[#A1A19A] hover:text-[#EDEDE8]">
-          View services
-        </Link>
+        <div className="mt-4 flex w-full justify-end">
+          <Link
+            href="/services"
+            className="inline-flex items-center font-mono text-sm text-[#A1A19A] transition-colors hover:text-[#EDEDE8]"
+          >
+            View services
+          </Link>
+        </div>
       </section>
     );
   }
