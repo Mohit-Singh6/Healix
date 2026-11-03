@@ -11,18 +11,22 @@ a { text-decoration: none; }
 :focus-visible { outline: 2px solid #F59E0B; outline-offset: 3px; }
 ::selection { color: #121211; background: #F59E0B; }
 
-.docs-prose { color: #B7B7B0; font-size: 15px; line-height: 1.8; }
+.docs-prose { color: #B7B7B0; font-size: 18px; line-height: 1.8; }
 .docs-prose > :first-child { margin-top: 0; }
 .docs-prose p { margin: 1rem 0; }
-.docs-prose h2 { margin: 2.5rem 0 .75rem; scroll-margin-top: 6rem; color: #EDEDE8; font-size: 1.25rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.35; }
-.docs-prose ul, .docs-prose ol { margin: 1rem 0; padding-left: 1.5rem; }
-.docs-prose li { margin: .5rem 0; padding-left: .25rem; }
+.docs-prose h2 { margin: 2.5rem 0 .75rem; scroll-margin-top: 6rem; color: #EDEDE8; font-size: 1.45rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.35; }
+.docs-prose ul, .docs-prose ol { margin: 1rem 0; padding-left: 1.7rem; }
+.docs-prose li { margin: .6rem 0; padding-left: .3rem; }
+.docs-prose ol { list-style: decimal; }
+.docs-prose ul { list-style: disc; }
 .docs-prose li::marker { color: #F59E0B; }
 .docs-prose strong { color: #E4E4DE; font-weight: 600; }
 .docs-prose code { border: 1px solid #2B2A24; border-radius: .25rem; background: #141412; padding: .12rem .35rem; color: #F2C46F; font-size: .88em; }
 .docs-prose a { color: #F59E0B; text-decoration: underline; text-underline-offset: 3px; }
 .docs-prose a:hover { color: #FDBA32; }
 .docs-prose h2:target { color: #F3C66B; }
+.docs-prose ol > li::marker,
+.docs-prose ul > li::marker { font-weight: 600; }
 
 .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .hide-scrollbar::-webkit-scrollbar { display: none; }

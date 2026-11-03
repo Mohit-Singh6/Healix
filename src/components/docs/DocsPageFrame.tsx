@@ -67,6 +67,11 @@ function TableOfContents({ items }: { items: TocItem[] }) {
   );
 }
 
+function formatRelatedQuestion(title: string) {
+  const cleaned = title.trim().replace(/[?]+$/g, "");
+  return cleaned.startsWith("Q.") ? cleaned : `Q. ${cleaned}?`;
+}
+
 function PageLinkCard({
   href,
   direction,
@@ -81,15 +86,15 @@ function PageLinkCard({
   return (
     <Link
       href={href}
-      className={`group flex min-h-20 flex-col justify-center gap-1 rounded-lg border border-[#2B2A24] bg-[#111110] px-4 py-3 transition-colors hover:border-[#F59E0B]/50 hover:bg-[#171715] ${
+      className={`group flex min-h-16 flex-col justify-center gap-1 rounded-md border border-[#2B2A24] bg-[#111110] px-3 py-2.5 transition-colors hover:border-[#F59E0B]/50 hover:bg-[#171715] ${
         isNext ? "items-end text-right" : "items-start"
       }`}
     >
-      <span className="flex items-center gap-1.5 font-mono text-xs text-[#8E8E86] group-hover:text-[#F59E0B]">
+      <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[#8E8E86] group-hover:text-[#F59E0B]">
         {isNext ? "Next page" : "Previous page"}
-        {isNext ? <ArrowRight aria-hidden="true" size={13} /> : <ArrowLeft aria-hidden="true" size={13} />}
+        {isNext ? <ArrowRight aria-hidden="true" size={12} /> : <ArrowLeft aria-hidden="true" size={12} />}
       </span>
-      <span className="text-sm font-medium text-[#EDEDE8]">{title}</span>
+      <span className="text-xs font-medium text-[#EDEDE8]">{title}</span>
     </Link>
   );
 }
@@ -138,7 +143,6 @@ export default function DocsPageFrame({
             <span className="size-2 rounded-full bg-[#F59E0B]" />
             Healix Documentation
           </Link>
-          <p className="mb-3 px-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[#77776F]">Guides</p>
           <NavigationLinks activePath={pathname} />
         </aside>
 
@@ -165,13 +169,13 @@ export default function DocsPageFrame({
 
           <div className="mb-7 flex items-center justify-between gap-3 border-y border-[#22221F] py-2.5 lg:mb-9 lg:border-0 lg:py-0">
             {previous ? (
-              <Link href={previous.href} className="inline-flex items-center gap-1.5 text-xs text-[#A1A19A] transition-colors hover:text-[#EDEDE8]">
-                <ChevronLeft aria-hidden="true" size={14} /> Previous
+              <Link href={previous.href} className="inline-flex items-center gap-1 text-[11px] text-[#A1A19A] transition-colors hover:text-[#EDEDE8]">
+                <ChevronLeft aria-hidden="true" size={12} /> Previous: {previous.title}
               </Link>
             ) : <span />}
             {next ? (
-              <Link href={next.href} className="ml-auto inline-flex items-center gap-1.5 text-xs text-[#A1A19A] transition-colors hover:text-[#EDEDE8]">
-                Next <ChevronRight aria-hidden="true" size={14} />
+              <Link href={next.href} className="ml-auto inline-flex items-center gap-1 text-[11px] text-[#A1A19A] transition-colors hover:text-[#EDEDE8]">
+                Next: {next.title} <ChevronRight aria-hidden="true" size={12} />
               </Link>
             ) : <span />}
           </div>
@@ -188,12 +192,12 @@ export default function DocsPageFrame({
               {guideIndex === 0 && next ? (
                 <Link
                   href={next.href}
-                  className="group flex min-h-20 flex-col items-end justify-center gap-1 rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B] px-4 py-3 text-right transition-colors hover:bg-[#D97706]"
+                  className="group flex min-h-16 flex-col items-end justify-center gap-1 rounded-md border border-[#F59E0B]/40 bg-[#F59E0B] px-3 py-2.5 text-right transition-colors hover:bg-[#D97706]"
                 >
-                  <span className="flex items-center gap-1.5 font-mono text-xs text-black/70">
-                    Start setting up services <ArrowRight aria-hidden="true" size={13} />
+                  <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-black/70">
+                    Start setting up services <ArrowRight aria-hidden="true" size={12} />
                   </span>
-                  <span className="text-sm font-semibold text-black">Connecting Your Service</span>
+                  <span className="text-xs font-semibold text-black">Connecting Your Service</span>
                 </Link>
               ) : (
                 <PageLinkCard href={next?.href} direction="next" title={next?.title ?? ""} />
@@ -218,7 +222,7 @@ export default function DocsPageFrame({
             <div className="mt-9 border-t border-[#22221F] pt-5">
               <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.14em] text-[#77776F]">Related questions</p>
               <Link href={related.href} className="group block rounded-md border border-[#2B2A24] bg-[#111110] p-3 transition-colors hover:border-[#F59E0B]/40">
-                <span className="text-sm font-medium text-[#D4D4CE] group-hover:text-[#F59E0B]">{related.title}</span>
+                <span className="block text-sm font-medium text-[#D4D4CE] group-hover:text-[#F59E0B]">{formatRelatedQuestion(related.title)}</span>
                 <span className="mt-1.5 block text-xs leading-relaxed text-[#8E8E86]">{related.description}</span>
               </Link>
             </div>
@@ -233,7 +237,7 @@ export default function DocsPageFrame({
           className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[#2B2A24] px-3 py-2 text-sm text-[#D4D4CE]"
         >
           {mobilePanel === "pages" ? <X aria-hidden="true" size={16} /> : <Menu aria-hidden="true" size={16} />}
-          Guides
+          Pages
         </button>
         <button
           type="button"
@@ -250,7 +254,7 @@ export default function DocsPageFrame({
           <aside
             role="dialog"
             aria-modal="true"
-            aria-label={mobilePanel === "pages" ? "Documentation guides" : "On this page"}
+            aria-label={mobilePanel === "pages" ? "Documentation" : "On this page"}
             className={`absolute inset-y-0 w-[min(88vw,360px)] overflow-y-auto border-[#2B2A24] bg-[#111110] p-5 shadow-2xl ${
               mobilePanel === "pages" ? "left-0 border-r" : "right-0 border-l"
             }`}
@@ -258,7 +262,7 @@ export default function DocsPageFrame({
           >
             <div className="mb-6 flex items-center justify-between">
               <p className="font-mono text-xs uppercase tracking-wider text-[#8E8E86]">
-                {mobilePanel === "pages" ? "Documentation guides" : "On this page"}
+                {mobilePanel === "pages" ? "Documentation" : "On this page"}
               </p>
               <button type="button" aria-label="Close navigation" onClick={() => setMobilePanel(null)} className="rounded p-1 text-[#A1A19A] hover:bg-[#22221F] hover:text-[#EDEDE8]">
                 <X aria-hidden="true" size={18} />
@@ -273,7 +277,7 @@ export default function DocsPageFrame({
               <div className="mt-8 border-t border-[#2B2A24] pt-5">
                 <p className="mb-3 font-mono text-[10px] uppercase tracking-wider text-[#77776F]">Related question</p>
                 <Link href={related.href} onClick={() => setMobilePanel(null)} className="text-sm text-[#D4D4CE] hover:text-[#F59E0B]">
-                  {related.title} →
+                  {formatRelatedQuestion(related.title)}
                 </Link>
               </div>
             )}

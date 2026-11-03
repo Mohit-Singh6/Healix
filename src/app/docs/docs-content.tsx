@@ -98,7 +98,7 @@ const pages: Record<string, DocPage> = {
   instrumentation: {
     slug: "instrumentation",
     title: "Instrumenting Your App for Error Tracking",
-    category: "Guides",
+    category: "Setup",
     toc: [
       { id: "choose-capture", title: "Choose an error-capture method" },
       { id: "automated-setup", title: "Automated setup" },
@@ -142,7 +142,7 @@ const pages: Record<string, DocPage> = {
   "incident-lifecycle": {
     slug: "incident-lifecycle",
     title: "Incident Lifecycle & Autonomous Fixes",
-    category: "Guides",
+    category: "Workflow",
     toc: [
       { id: "capture-and-triage", title: "Capture and triage" },
       { id: "investigation", title: "Investigation" },
@@ -164,7 +164,7 @@ const pages: Record<string, DocPage> = {
   "managing-services": {
     slug: "managing-services",
     title: "Managing Multiple Services & Team Permissions",
-    category: "Guides",
+    category: "Operations",
     toc: [
       { id: "add-services", title: "Add more services" },
       { id: "repository-access", title: "Grant repository access" },
