@@ -5,19 +5,19 @@ async function testDeduplication() {
     const testErrors = [
         {
             projectId: "cmup2qpm30001rcy6q2bvon34",
-            serviceName: "service-1",
+            projectName: "project-1",
             message: "Database timeout error",
             stackTrace: "Database connection pool timeout on checkout"
         },
         {
             projectId: "cmup2qpm30001rcy6q2bvon34",
-            serviceName: "service-2",
+            projectName: "project-2",
             message: "Prisma connection timeout",
             stackTrace: "Prisma connection timeout after 5000ms on checkout"
         },
         {
             projectId: "cmup2qpm30001rcy6q2bvon34",
-            serviceName: "service-3",
+            projectName: "project-3",
             message: "Null pointer exception",
             stackTrace: "Null pointer exception in auth token verification"
         }

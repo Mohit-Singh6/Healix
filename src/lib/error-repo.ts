@@ -4,7 +4,7 @@ import { createId } from "@paralleldrive/cuid2"; // or crypto.randomUUID()
 export interface CreateErrorLogParams {
   projectId: string;
   incidentId?: string | null;
-  serviceName: string;
+  projectName: string;
   message: string;
   stackTrace: string;
   statusCode?: number | null;
@@ -15,7 +15,7 @@ export interface CreateErrorLogParams {
 export interface SimilarErrorMatch {
   id: string;
   incidentId: string | null;
-  serviceName: string;
+  projectName: string;
   message: string;
   stackTrace: string;
   similarity: number; // Value between 0 and 1
@@ -44,7 +44,7 @@ export async function createErrorLogWithVector(params: CreateErrorLogParams): Pr
     ) VALUES (
       ${id},
       ${params.projectId},${params.incidentId ?? null},
-      ${params.serviceName},${params.message},
+      ${params.projectName},${params.message},
       ${params.stackTrace},${params.statusCode ?? null},
       ${params.endpoint ?? null},
       ${vectorString}::vector,
@@ -79,7 +79,7 @@ export async function findSimilarRecentErrors(
     Array<{
       id: string;
       incidentId: string | null;
-      serviceName: string;
+      projectName: string;
       message: string;
       stackTrace: string;
       similarity: number;
@@ -89,7 +89,7 @@ export async function findSimilarRecentErrors(
     SELECT 
       "id",
       "incidentId",
-      "serviceName",
+      "serviceName" AS "projectName",
       "message",
       "stackTrace",
       "createdAt",

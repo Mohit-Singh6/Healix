@@ -32,7 +32,7 @@ function selectedRepositoryUrl(
   repo: string,
   branch: string,
 ) {
-  const target = new URL("/services/new", request.url);
+  const target = new URL("/projects/new", request.url);
   target.searchParams.set("installation_id", installationId);
   target.searchParams.set("owner", owner);
   target.searchParams.set("repo", repo);
@@ -80,12 +80,12 @@ export async function GET(request: Request) {
     }
 
     const repositories = await listInstallationRepositories(installationId);
-    const existingServices = await prisma.project.findMany({
+    const existingProjects = await prisma.project.findMany({
       where: { userId: user.id, githubInstallationId: installationId },
       select: { repoOwner: true, repoName: true },
     });
     const registeredSet = new Set(
-      existingServices.map((service) => `${service.repoOwner}/${service.repoName}`.toLowerCase()),
+      existingProjects.map((project) => `${project.repoOwner}/${project.repoName}`.toLowerCase()),
     );
     const unconfiguredRepositories = repositories.filter(
       (repository) => !registeredSet.has(`${repository.owner.login}/${repository.name}`.toLowerCase()),
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
         unconfiguredRepositories[0].name,
         unconfiguredRepositories[0].default_branch || "main",
       )
-      : new URL(`/services/new/select-repo?installation_id=${encodeURIComponent(installationId)}`, request.url);
+      : new URL(`/projects/new/select-repo?installation_id=${encodeURIComponent(installationId)}`, request.url);
     const response = NextResponse.redirect(target);
     clearInstallStateCookie(response);
     response.cookies.set(PENDING_INSTALLATION_COOKIE, installationId, {

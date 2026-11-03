@@ -7,7 +7,7 @@ export const INCIDENT_TRIAGE_QUEUE = "incident-triage-queue";
 // Strongly-typed job payload
 export interface AlertJobData {
   projectId: string;
-  serviceName: string;
+  projectName: string;
   message: string;
   stackTrace: string;
   statusCode?: number | null;

@@ -18,10 +18,10 @@ import {
 
 const guidePages = [
   { slug: "introduction", title: "Introduction", href: "/docs/introduction" },
-  { slug: "connecting-services", title: "Connecting Your Service", href: "/docs/connecting-services" },
+  { slug: "connecting-projects", title: "Connecting Your Project", href: "/docs/connecting-projects" },
   { slug: "instrumentation", title: "Instrumenting Your App", href: "/docs/instrumentation" },
   { slug: "incident-lifecycle", title: "Incident Lifecycle & Autonomous Fixes", href: "/docs/incident-lifecycle" },
-  { slug: "managing-services", title: "Managing Multiple Services", href: "/docs/managing-services" },
+  { slug: "managing-projects", title: "Managing Multiple Projects", href: "/docs/managing-projects" },
 ];
 
 type TocItem = { id: string; title: string };
@@ -194,9 +194,9 @@ export default function DocsPageFrame({
                   className="group flex min-h-16 w-full max-w-80 flex-col items-end justify-center justify-self-end gap-1 rounded-md border border-[#F59E0B]/40 bg-[#F59E0B] px-3 py-2.5 text-right transition-colors hover:bg-[#D97706]"
                 >
                   <span className="flex items-center gap-1.5 font-mono text-[13px] text-black/70">
-                    Start setting up services <ArrowRight aria-hidden="true" size={12} />
+                    Start setting up projects <ArrowRight aria-hidden="true" size={12} />
                   </span>
-                  <span className="text-[15px] font-semibold text-black">Connecting Your Service</span>
+                  <span className="text-[15px] font-semibold text-black">Connecting Your Project</span>
                 </Link>
               ) : (
                 <PageLinkCard href={next?.href} direction="next" title={next?.title ?? ""} />

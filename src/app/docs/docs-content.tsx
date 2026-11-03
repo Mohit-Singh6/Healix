@@ -35,21 +35,21 @@ const pages: Record<string, DocPage> = {
         <p>Traditional error trackers tell you when something is broken. Healix helps your team understand why and prepare a safe fix.</p>
         <ul>
           <li><strong>Zero-dependency telemetry:</strong> capture errors with native runtime hooks instead of adding a heavy SDK.</li>
-          <li><strong>Dual-runtime coverage:</strong> connect server-side errors and frontend crashes to the same service.</li>
+          <li><strong>Dual-runtime coverage:</strong> connect server-side errors and frontend crashes to the same project.</li>
           <li><strong>Autonomous investigation:</strong> correlate stack traces with affected code and recent repository history.</li>
           <li><strong>Human-in-the-loop safeguards:</strong> review every proposed change in a pull request before it is merged.</li>
         </ul>
         <h2 id="core-concepts">Core concepts</h2>
         <ul>
-          <li><strong>Services</strong> represent monitored applications or microservices linked to a repository and environment.</li>
-          <li><strong>Telemetry endpoints</strong> are unique ingestion URLs that receive reports for a service.</li>
+          <li><strong>Projects</strong> represent monitored applications or microservices linked to a repository and environment.</li>
+          <li><strong>Telemetry endpoints</strong> are unique ingestion URLs that receive reports for a project.</li>
           <li><strong>Remediation copilot</strong> investigates incoming incidents and prepares a proposed fix for review.</li>
         </ul>
         <h2 id="how-it-works">How it works</h2>
         <ol>
           <li>Connect one or more repositories through the Healix GitHub App.</li>
-          <li>Set up error capture with an instrumentation pull request or forward your existing logs to the service webhook.</li>
-          <li>Your application sends runtime errors to the service ingestion endpoint.</li>
+          <li>Set up error capture with an instrumentation pull request or forward your existing logs to the project webhook.</li>
+          <li>Your application sends runtime errors to the project ingestion endpoint.</li>
           <li>Review the incident analysis and any proposed fix pull request before merging.</li>
         </ol>
         <div className="not-prose mt-8 rounded-lg border border-[#2B2A24] bg-[#111110] p-4">
@@ -61,15 +61,15 @@ const pages: Record<string, DocPage> = {
       </>
     ),
   },
-  "connecting-services": {
-    slug: "connecting-services",
-    title: "Connecting Your Service & GitHub Setup",
+  "connecting-projects": {
+    slug: "connecting-projects",
+    title: "Connecting Your Project & GitHub Setup",
     category: "Getting started",
     toc: [
-      { id: "what-is-a-service", title: "What is a service?" },
+      { id: "what-is-a-project", title: "What is a project?" },
       { id: "connect-github", title: "Connect GitHub" },
       { id: "choose-repository", title: "Choose a repository" },
-      { id: "configure-service", title: "Configure the service" },
+      { id: "configure-project", title: "Configure the project" },
     ],
     related: {
       title: "Why GitHub permissions are needed",
@@ -78,20 +78,20 @@ const pages: Record<string, DocPage> = {
     },
     body: (
       <>
-        <p>Connect a repository to create a Healix service. A service groups the repository, environment settings, and telemetry endpoint used to investigate its incidents.</p>
-        <h2 id="what-is-a-service">What is a service?</h2>
-        <p>A service is one monitored codebase or application. Create separate services when you want independent telemetry endpoints, environments, or incident streams.</p>
+        <p>Connect a repository to create a Healix project. A project groups the repository, environment settings, and telemetry endpoint used to investigate its incidents.</p>
+        <h2 id="what-is-a-project">What is a project?</h2>
+        <p>A project is one monitored codebase or application. Create separate projects when you want independent telemetry endpoints, environments, or incident streams.</p>
         <h2 id="connect-github">Connect GitHub</h2>
         <ol>
-          <li>Open <strong>Add Service</strong> from your dashboard.</li>
+          <li>Open <strong>Add Project</strong> from your dashboard.</li>
           <li>Install the Healix GitHub App, or select an existing installation.</li>
           <li>Choose access to all repositories or only the repositories you select.</li>
         </ol>
         <p>Healix returns to your workspace after GitHub confirms the installation. You can update repository access later in GitHub App settings.</p>
         <h2 id="choose-repository">Choose a repository</h2>
         <p>If multiple repositories are available, select one from the repository picker. Repositories already configured in Healix are marked as added so they cannot be registered twice.</p>
-        <h2 id="configure-service">Configure the service</h2>
-        <p>Confirm the verified repository and default branch, choose an editable service name, and select the deployment provider and alert routing details relevant to your environment. Submit the form to create the service and its ingestion endpoint.</p>
+        <h2 id="configure-project">Configure the project</h2>
+        <p>Confirm the verified repository and default branch, choose an editable project name, and select the deployment provider and alert routing details relevant to your environment. Submit the form to create the project and its ingestion endpoint.</p>
       </>
     ),
   },
@@ -112,22 +112,22 @@ const pages: Record<string, DocPage> = {
     },
     body: (
       <>
-        <p>After creating a service, connect application errors to its telemetry endpoint. Choose automated setup for supported application structures, or forward events from your existing monitoring tools.</p>
+        <p>After creating a project, connect application errors to its telemetry endpoint. Choose automated setup for supported application structures, or forward events from your existing monitoring tools.</p>
         <h2 id="choose-capture">Choose an error-capture method</h2>
         <ul>
           <li><strong>Automated setup:</strong> Healix inspects the repository structure and opens a pull request with lightweight reporter code.</li>
-          <li><strong>Manual webhook:</strong> copy the service ingestion URL and send compatible error payloads from your existing logger or alert pipeline.</li>
+          <li><strong>Manual webhook:</strong> copy the project ingestion URL and send compatible error payloads from your existing logger or alert pipeline.</li>
         </ul>
         <h2 id="automated-setup">Automated setup</h2>
         <ol>
-          <li>Select <strong>Auto-Setup Error Tracking</strong> from the service setup screen or dashboard.</li>
+          <li>Select <strong>Auto-Setup Error Tracking</strong> from the project setup screen or dashboard.</li>
           <li>Healix identifies a supported framework and prepares instrumentation for its detected entry points.</li>
           <li>Review the generated branch and pull request on GitHub.</li>
           <li>Merge the pull request to activate the instrumentation in your application.</li>
         </ol>
         <p>The generator supports common Next.js App and Pages Router projects, React SPA entry points, and Express/Node server entry points. Unsupported or ambiguous repository structures are rejected rather than overwritten.</p>
         <h2 id="manual-webhook">Manual webhook</h2>
-        <p>Copy the unique endpoint shown for your service and configure your logging integration to send a JSON <code>POST</code>. Include a service name, error message, and stack trace. Keep the URL private because it contains the service ingestion credential.</p>
+        <p>Copy the unique endpoint shown for your project and configure your logging integration to send a JSON <code>POST</code>. Include the required <code>serviceName</code> telemetry field, an error message, and a stack trace. Keep the URL private because it contains the project ingestion credential.</p>
         <h2 id="safe-reporting">Safe reporting behavior</h2>
         <p>Generated reporters use native platform APIs and handle their own network failures so telemetry delivery does not become a second application error. Generated user-facing fallback messages are neutral and include a retry action.</p>
         <div className="not-prose mt-8 rounded-lg border border-[#2B2A24] bg-[#111110] p-4">
@@ -152,7 +152,7 @@ const pages: Record<string, DocPage> = {
       <>
         <p>Healix turns an incoming error report into an incident that can be investigated, reviewed, and resolved with a clear audit trail.</p>
         <h2 id="capture-and-triage">Capture and triage</h2>
-        <p>When a service endpoint receives a valid report, Healix queues it for processing and groups related events to reduce duplicate noise. The dashboard shows the incident state and supporting runtime context.</p>
+        <p>When a project endpoint receives a valid report, Healix queues it for processing and groups related events to reduce duplicate noise. The dashboard shows the incident state and supporting runtime context.</p>
         <h2 id="investigation">Investigation</h2>
         <p>The investigation agent uses the available stack trace and repository context to identify likely affected code and relevant changes. Findings and confidence are presented with the incident so an operator can assess the result.</p>
         <h2 id="review-and-resolution">Review and resolution</h2>
@@ -161,24 +161,24 @@ const pages: Record<string, DocPage> = {
       </>
     ),
   },
-  "managing-services": {
-    slug: "managing-services",
-    title: "Managing Multiple Services & Team Permissions",
+  "managing-projects": {
+    slug: "managing-projects",
+    title: "Managing Multiple Projects & Team Permissions",
     category: "Operations",
     toc: [
-      { id: "add-services", title: "Add more services" },
+      { id: "add-projects", title: "Add more projects" },
       { id: "repository-access", title: "Grant repository access" },
-      { id: "service-settings", title: "Update service settings" },
+      { id: "project-settings", title: "Update project settings" },
     ],
     body: (
       <>
-        <p>Manage multiple repositories from one workspace while keeping each service’s configuration and incident stream distinct.</p>
-        <h2 id="add-services">Add more services</h2>
-        <p>Choose <strong>Add Service</strong> from your dashboard. Repositories granted to your GitHub App installation are available in the picker. Already configured repositories remain visible but disabled.</p>
+        <p>Manage multiple repositories from one workspace while keeping each project’s configuration and incident stream distinct.</p>
+        <h2 id="add-projects">Add more projects</h2>
+        <p>Choose <strong>Add Project</strong> from your dashboard. Repositories granted to your GitHub App installation are available in the picker. Already configured repositories remain visible but disabled.</p>
         <h2 id="repository-access">Grant repository access</h2>
         <p>If a repository is missing, open the GitHub App installation settings, grant access to the repository, then return to Healix and refresh the available repositories. You can also update whether the installation has access to all repositories or a selected subset.</p>
-        <h2 id="service-settings">Update service settings</h2>
-        <p>Use the service actions menu to edit its display name, deployment provider settings, environment details, and alert routing. Repository identity and default branch remain tied to the selected GitHub repository.</p>
+        <h2 id="project-settings">Update project settings</h2>
+        <p>Use the project actions menu to edit its display name, deployment provider settings, environment details, and alert routing. Repository identity and default branch remain tied to the selected GitHub repository.</p>
       </>
     ),
   },
@@ -192,9 +192,9 @@ const pages: Record<string, DocPage> = {
       { id: "credential-handling", title: "Credential handling" },
     ],
     related: {
-      title: "Connecting Your Service",
-      href: "/docs/connecting-services",
-      description: "Return to the service setup walkthrough.",
+      title: "Connecting Your Project",
+      href: "/docs/connecting-projects",
+      description: "Return to the project setup walkthrough.",
     },
     body: (
       <>
@@ -229,7 +229,7 @@ const pages: Record<string, DocPage> = {
     },
     body: (
       <>
-        <p>The automated instrumentation pull request adds small reporting hooks at framework-supported entry points and sends error context to the unique ingestion endpoint for the selected service.</p>
+        <p>The automated instrumentation pull request adds small reporting hooks at framework-supported entry points and sends error context to the unique ingestion endpoint for the selected project.</p>
         <h2 id="zero-dependencies">Zero-dependency reporters</h2>
         <p>Generated reporter code uses native <code>fetch</code> and browser APIs instead of adding third-party packages. This keeps the proposed integration small and avoids dependency conflicts.</p>
         <h2 id="frontend-reporting">Frontend reporting</h2>

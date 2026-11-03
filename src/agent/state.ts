@@ -122,7 +122,7 @@ export type HumanDecisionPayload = z.infer<typeof HumanDecisionPayloadSchema>;
 export const IncidentState = new StateSchema({
   // --- Immutable Incident Baseline (passed at graph start) ---
   incidentId: z.string(),
-  serviceName: z.string(),
+  projectName: z.string(),
   stackTrace: z.string(),
   errorMessage: z.string(),
   endpoint: z.string().optional(),

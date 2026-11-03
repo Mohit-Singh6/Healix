@@ -20,10 +20,10 @@ async function testTriageAgent() {
     orderBy: { createdAt: "desc" },
   });
 
-  const serviceName = latestLog?.serviceName || "unknown-service";
+  const projectName = latestLog?.serviceName || "unknown-project";
 
   console.log(`Starting Triage Graph for Incident: ${incident.id}`);
-  console.log(`Service: ${serviceName}`);
+  console.log(`Project: ${projectName}`);
 
   const config = {
     configurable: {
@@ -33,7 +33,7 @@ async function testTriageAgent() {
 
   const initialInput = {
     incidentId: incident.id,
-    serviceName,
+    projectName,
     stackTrace: latestLog?.stackTrace || "Error: Unknown failure",
     errorMessage: incident.title,
   };

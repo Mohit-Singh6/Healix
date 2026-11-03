@@ -13,7 +13,7 @@ export async function getDashboardData() {
   });
   if (!user) redirect("/auth");
 
-  const [services, installationRows, incidents, resolvedIncidents, pendingApprovals, activeIncidents] = await Promise.all([
+  const [projects, installationRows, incidents, resolvedIncidents, pendingApprovals, activeIncidents] = await Promise.all([
     prisma.project.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -41,29 +41,45 @@ export async function getDashboardData() {
     }),
     listUserIncidents(user.id),
     prisma.incident.count({
-      where: { project: { is: { userId: user.id } }, status: "RESOLVED" },
-    }),
-    prisma.incident.count({
-      where: { project: { is: { userId: user.id } }, status: "PENDING_APPROVAL" },
+      where: {
+        project: { is: { userId: user.id } },
+        OR: [
+          { status: "RESOLVED" },
+          { status: { not: "DISMISSED" }, proposedAction: "NO_ACTION" },
+        ],
+      },
     }),
     prisma.incident.count({
       where: {
         project: { is: { userId: user.id } },
-        status: { in: ["INVESTIGATING", "PENDING_APPROVAL", "MITIGATING"] },
+        status: "PENDING_APPROVAL",
+        proposedAction: { not: "NO_ACTION" },
+      },
+    }),
+    prisma.incident.count({
+      where: {
+        project: { is: { userId: user.id } },
+        OR: [
+          { status: "PENDING_APPROVAL", proposedAction: { not: "NO_ACTION" } },
+          { status: "MITIGATING" },
+          { status: "INVESTIGATING", proposedAction: null },
+          { status: "INVESTIGATING", proposedAction: "MANUAL_INTERVENTION" },
+        ],
       },
     }),
   ]);
 
   return {
-    initialServices: services.map((service) => {
-      const { platformApiToken, ...safeService } = service;
+    initialProjects: projects.map((project) => {
+      const { platformApiToken, ...safeProject } = project;
       return {
-        ...safeService,
+        ...safeProject,
+        platformProjectId: safeProject.platformServiceId,
         hasPlatformApiToken: Boolean(platformApiToken),
       };
     }),
-    githubInstallationIds: installationRows.flatMap((service) =>
-      service.githubInstallationId ? [service.githubInstallationId] : [],
+    githubInstallationIds: installationRows.flatMap((project) =>
+      project.githubInstallationId ? [project.githubInstallationId] : [],
     ),
     initialIncidents: incidents,
     resolvedIncidents,

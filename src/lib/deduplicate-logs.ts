@@ -5,7 +5,7 @@ import type { IncidentSeverity } from "@prisma/client";
 
 export interface ErrorLogInput {
     projectId: string;
-    serviceName: string;
+    projectName: string;
     message: string;
     stackTrace: string;
     statusCode?: number | null;
@@ -20,7 +20,7 @@ export interface DeduplicationResult {
 
 async function createNewIncident(params: {
     projectId: string;
-    serviceName: string;
+    projectName: string;
     title: string;
     errorMessage: string;
     stackTrace: string;
@@ -30,7 +30,7 @@ async function createNewIncident(params: {
         data: {
             projectId: params.projectId,
             title: params.title.slice(0, 255), // Guard against excessively long error messages
-            serviceName: params.serviceName,
+            serviceName: params.projectName,
             errorMessage: params.errorMessage,
             stackTrace: params.stackTrace,
             status: "INVESTIGATING",
@@ -50,7 +50,7 @@ export async function deduplicateErrorLog(
 ): Promise<DeduplicationResult> {
     // 1. Generate 768-d embedding
     const embedding = await generateErrorEmbedding({
-        serviceName: err.serviceName,
+        projectName: err.projectName,
         message: err.message,
         stackTrace: err.stackTrace,
     });
@@ -70,8 +70,8 @@ export async function deduplicateErrorLog(
     if (!targetIncidentId) {
         targetIncidentId = await createNewIncident({
             projectId: err.projectId,
-            serviceName: err.serviceName,
-            title: `[${err.serviceName}] ${err.message}`,
+            projectName: err.projectName,
+            title: `[${err.projectName}] ${err.message}`,
             errorMessage: err.message,
             stackTrace: err.stackTrace,
         });

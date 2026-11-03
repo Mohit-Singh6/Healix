@@ -30,11 +30,11 @@ export const triageWorker = new Worker<AlertJobData, DeduplicationResult>(
   INCIDENT_TRIAGE_QUEUE,
   async (job: Job<AlertJobData>) => {
     console.log(`\n[Job ${job.id}] Processing incoming alert for project: ${job.data.projectId}`);
-    console.log(`[Job ${job.id}] Service: ${job.data.serviceName} | Message: ${job.data.message}`);
+    console.log(`[Job ${job.id}] Project: ${job.data.projectName} | Message: ${job.data.message}`);
 
     const result = await deduplicateErrorLog({
       projectId: job.data.projectId,
-      serviceName: job.data.serviceName,
+      projectName: job.data.projectName,
       message: job.data.message,
       stackTrace: job.data.stackTrace,
       statusCode: job.data.statusCode,
@@ -60,7 +60,7 @@ export const triageWorker = new Worker<AlertJobData, DeduplicationResult>(
         const agentState = await triageGraph.invoke(
           {
             incidentId: result.incidentId,
-            serviceName: job.data.serviceName,
+            projectName: job.data.projectName,
             errorMessage: job.data.message,
             stackTrace: job.data.stackTrace,
             correlatedLogs: [],

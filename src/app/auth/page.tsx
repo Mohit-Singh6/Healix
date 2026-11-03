@@ -35,7 +35,7 @@ export default async function AuthPage({
           />
         </div>
         <p className="mx-auto mt-4 max-w-lg text-center text-sm leading-6 text-[#A1A19A]">
-          Sign in to connect your services and bring calm to your incident response.
+          Sign in to connect your projects and bring calm to your incident response.
         </p>
 
         {errorMessage && (

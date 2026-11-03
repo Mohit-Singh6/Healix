@@ -56,7 +56,7 @@ export async function handleAlertIngestion(req: NextRequest, pathApiKey?: string
     const jobId = crypto.createHash("sha256").update(dedupeString).digest("hex");
     const jobData: AlertJobData = {
       projectId: project.id,
-      serviceName: validData.serviceName,
+      projectName: validData.serviceName,
       message: validData.message,
       stackTrace: validData.stackTrace,
       statusCode: validData.statusCode ?? null,

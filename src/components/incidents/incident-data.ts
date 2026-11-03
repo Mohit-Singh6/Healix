@@ -16,7 +16,7 @@ export interface IncidentData {
   id: string;
   displayId: string;
   title: string;
-  service: string;
+  project: string;
   severity: "CRITICAL" | "HIGH" | "MEDIUM";
   timestamp: string;
   updatedAt: string;
@@ -52,10 +52,11 @@ export interface DashboardIncident {
   displayId: string;
   severity: IncidentData["severity"];
   signature: string;
-  service: string;
+  project: string;
   volume: number;
   createdAt: string;
   status: IncidentStatus;
+  proposedAction: ProposedIncidentAction | null;
   humanApprovalStatus: IncidentData["humanApprovalStatus"];
   reviewedBy: string | null;
   target: string | null;

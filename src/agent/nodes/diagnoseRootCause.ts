@@ -145,7 +145,7 @@ function formatIncidentContext(state: IncidentAgentState): string {
   return `You are an expert site reliability and software engineer diagnosing an active production crash.
 
 INCIDENT METRICS:
-- Service: ${state.serviceName}
+- Project: ${state.projectName}
 - Error Message: ${state.errorMessage}
 - Endpoint / Route: ${state.endpoint ?? "Not provided"}
 - Raw Stack Trace (May be partial or minified):
@@ -241,7 +241,7 @@ CRITICAL RULE FOR BUGFIX_PR: Only choose BUGFIX_PR when you can provide an exact
 
 For BUGFIX_PR, actionPayload must include targetFilePath, patchMode "SEARCH_REPLACE", and a non-empty replacements array containing non-empty searchBlock and replaceBlock strings. For MANUAL_INTERVENTION, return an empty actionPayload. For deliberate test errors, use proposedAction "NO_ACTION" and include noFixReason "TEST_ERROR" and a concise noFixExplanation.
 
-Service: ${state.serviceName.slice(0, 200)}
+Project: ${state.projectName.slice(0, 200)}
 Error: ${state.errorMessage.slice(0, 1200)}
 Route: ${(state.endpoint ?? "Not provided").slice(0, 300)}
 Stack trace:

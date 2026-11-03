@@ -476,7 +476,7 @@ export async function executeRemediationNode(
     You are an expert site reliability engineer drafting an official post-mortem incident report.
 
     INCIDENT CONTEXT:
-    Service: ${state.serviceName}
+    Project: ${state.projectName}
     Error Title: ${state.errorMessage}
     Stack Trace:
     ${state.stackTrace}

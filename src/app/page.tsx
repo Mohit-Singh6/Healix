@@ -185,10 +185,10 @@ export default function Home() {
               <p className="font-mono text-xs uppercase tracking-wider text-[#A1A19A]">03 / Codebase context</p>
               <h3 className="mt-4 text-xl font-semibold">Repository Graph Embeddings</h3>
               <p className="mt-3 text-sm leading-6 text-[#A1A19A]">
-                Connect service relationships, code ownership, commit history, and prior post-mortems to each diagnosis.
+                Connect project relationships, code ownership, commit history, and prior post-mortems to each diagnosis.
               </p>
               <div className="mt-5 flex flex-wrap gap-2 font-mono text-[11px] text-[#A1A19A]">
-                <span className="border border-[#2B2A24] px-2 py-1">service graph</span>
+                <span className="border border-[#2B2A24] px-2 py-1">project graph</span>
                 <span className="border border-[#2B2A24] px-2 py-1">git history</span>
                 <span className="border border-[#2B2A24] px-2 py-1">post-mortems</span>
               </div>

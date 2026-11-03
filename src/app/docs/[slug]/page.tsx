@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getDocPage } from "../docs-content";
 
 const titles: Record<string, string> = {
   introduction: "Introduction to Healix",
-  "connecting-services": "Connecting Your Service & GitHub Setup",
+  "connecting-projects": "Connecting Your Project & GitHub Setup",
   instrumentation: "Instrumenting Your App for Error Tracking",
   "incident-lifecycle": "Incident Lifecycle & Autonomous Fixes",
-  "managing-services": "Managing Multiple Services & Team Permissions",
+  "managing-projects": "Managing Multiple Projects & Team Permissions",
   "why-github-permissions": "Why GitHub Permissions Are Needed",
   "error-catching-works": "How Error Catching Works",
 };
@@ -31,5 +32,7 @@ export default async function DocsSlugPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  if (slug === "connecting-services") redirect("/docs/connecting-projects");
+  if (slug === "managing-services") redirect("/docs/managing-projects");
   return getDocPage(slug);
 }

@@ -1,7 +1,5 @@
-import DashboardView from "@/src/components/dashboard/DashboardView";
-import { getDashboardData } from "../page-data";
+import { redirect } from "next/navigation";
 
-export default async function ServicesPage() {
-  const data = await getDashboardData();
-  return <DashboardView view="services" {...data} />;
+export default function LegacyServicesPage() {
+  redirect("/projects");
 }

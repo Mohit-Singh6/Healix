@@ -10,7 +10,7 @@ async function runTest() {
   // Replace with a valid incidentId or projectId known in your database
   const mockState: Partial<IncidentAgentState> = {
     incidentId: "cmvyzf6m800002khfroxpvmyt",
-    serviceName: "blood-donation-frontend",
+    projectName: "blood-donation-frontend",
     errorMessage: "TypeError: Cannot read properties of null (reading 'length')",
     endpoint: "/login",
     stackTrace:

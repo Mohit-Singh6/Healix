@@ -157,6 +157,10 @@ export default function IncidentWorkbench({
     ? "Resolved"
     : isDismissed
       ? "Dismissed"
+      : isManualFollowUp
+        ? "Manual action required"
+        : isNoActionRecommended
+          ? "No action needed"
       : incidentData.humanApprovalStatus === "APPROVED"
         ? "Approved · In progress"
         : isPending
@@ -355,9 +359,11 @@ export default function IncidentWorkbench({
                     ? "border-emerald-500/30 bg-emerald-950/60 text-emerald-400"
                     : isPending
                       ? "border-[#F59E0B]/30 bg-[#F59E0B]/10 text-[#F59E0B]"
+                      : isManualFollowUp
+                        ? "border-[#F59E0B]/30 bg-[#F59E0B]/10 text-[#F59E0B]"
                       : "border-[#383730] bg-[#1B1B18] text-[#A1A19A]"
             }`}>
-              <span className={`size-1.5 rounded-full ${isResolved || incidentData.humanApprovalStatus === "APPROVED" ? "bg-emerald-400" : isDismissed ? "bg-rose-400" : isPending ? "bg-[#F59E0B]" : "bg-[#77766F]"}`} />
+              <span className={`size-1.5 rounded-full ${isResolved || incidentData.humanApprovalStatus === "APPROVED" ? "bg-emerald-400" : isDismissed ? "bg-rose-400" : isPending || isManualFollowUp ? "bg-[#F59E0B]" : "bg-[#77766F]"}`} />
               {statusLabel}
             </span>
             <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-xs font-medium ${
@@ -373,7 +379,7 @@ export default function IncidentWorkbench({
           </div>
           <p className="mt-2 break-words font-mono text-base text-[#D4D4CE]">{incidentData.title}</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 font-mono text-xs text-[#8E8E86]">
-            <span className="rounded border border-[#2B2A24] bg-[#1E1E1B] px-2 py-0.5 text-[#EDEDE8]">{incidentData.service}</span>
+            <span className="rounded border border-[#2B2A24] bg-[#1E1E1B] px-2 py-0.5 text-[#EDEDE8]">{incidentData.project}</span>
             <span aria-hidden="true">·</span>
             <span>Detected <time dateTime={incidentData.timestamp}>{formatDateTimeIST(incidentData.timestamp)}</time></span>
             <span aria-hidden="true">·</span>
@@ -404,7 +410,7 @@ export default function IncidentWorkbench({
         className={`mt-7 flex flex-col justify-between gap-5 rounded-lg border p-5 transition-colors ${
           isResolved
             ? "border-emerald-800/40 bg-emerald-950/20"
-            : isPending || isMitigating
+            : isPending || isMitigating || isManualFollowUp
               ? "border-[#D97706]/40 bg-[#1E1C14]"
               : "border-[#383730] bg-[#181816]"
         } lg:flex-row lg:items-center`}
@@ -413,7 +419,7 @@ export default function IncidentWorkbench({
           <span className={`flex size-10 shrink-0 items-center justify-center rounded-md border ${
             isResolved
               ? "border-emerald-800/40 bg-emerald-950/40 text-emerald-400"
-              : isPending || isMitigating
+              : isPending || isMitigating || isManualFollowUp
                 ? "border-[#D97706]/30 bg-[#F59E0B]/10 text-[#F59E0B]"
                 : "border-[#383730] bg-[#121211] text-[#A1A19A]"
           }`}>
@@ -423,7 +429,7 @@ export default function IncidentWorkbench({
             <p className={`font-mono text-xs tracking-wide ${
               isResolved
                 ? "text-emerald-400"
-                : isPending || isMitigating
+                : isPending || isMitigating || isManualFollowUp
                   ? "text-[#F59E0B]"
                   : "text-[#A1A19A]"
             }`}>
@@ -458,7 +464,7 @@ export default function IncidentWorkbench({
             </h2>
             <p className="mt-1 text-base leading-6 text-[#A1A19A]">
               {incidentData.actionSummary ?? (isTriageInProgress
-                ? "Healix is correlating logs and investigating the affected service."
+                ? "Healix is correlating logs and investigating the affected project."
                 : "Automated triage has not proposed a remediation yet.")}
             </p>
             {(isManualFollowUp || isNoActionRecommended) && incidentData.hypothesis !== incidentData.actionSummary && (

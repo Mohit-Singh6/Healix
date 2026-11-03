@@ -20,11 +20,11 @@ export async function correlateLogsNode(
   const startTime = new Date(incident.createdAt.getTime() - windowMinutes * 60 * 1000);
   const endTime = new Date(incident.createdAt.getTime() + windowMinutes * 60 * 1000);
 
-  // Fetch adjacent logs from the same service within the 20-minute window
+  // Fetch adjacent logs from the same project within the 20-minute window
   const logs = await prisma.errorLog.findMany({
     where: {
       projectId: incident.projectId,
-      serviceName: state.serviceName,
+      serviceName: state.projectName,
       createdAt: {
         gte: startTime,
         lte: endTime,

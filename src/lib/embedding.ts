@@ -15,7 +15,7 @@ function cleanErrorContext(text: string): string {
 }
 
 export interface ErrorLogInput {
-  serviceName: string;
+  projectName: string;
   message: string;
   stackTrace: string;
 }
@@ -26,7 +26,7 @@ export async function generateErrorEmbedding(error: ErrorLogInput): Promise<numb
     error.stackTrace.split("\n").slice(0, 5).join("\n") // Limit to first 5 lines of stack trace for embedding
   );
 
-  const fingerprint = `Service: ${error.serviceName}\nError: ${sanitizedMessage}\nTrace:\n${sanitizedTrace}`;
+  const fingerprint = `Project: ${error.projectName}\nError: ${sanitizedMessage}\nTrace:\n${sanitizedTrace}`;
 
   const response = await ai.models.embedContent({
     model: "gemini-embedding-2",

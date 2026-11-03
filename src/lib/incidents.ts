@@ -115,11 +115,11 @@ export async function listUserIncidents(userId: string): Promise<DashboardIncide
     select: {
       id: true,
       title: true,
-      serviceName: true,
       errorMessage: true,
       stackTrace: true,
       severity: true,
       status: true,
+      proposedAction: true,
       humanApprovalStatus: true,
       reviewedBy: true,
       actionPayload: true,
@@ -137,16 +137,18 @@ export async function listUserIncidents(userId: string): Promise<DashboardIncide
   return records.map((incident) => {
     const payload = incidentActionPayload(incident.actionPayload);
     const stackTrace = incident.stackTrace ?? "";
+    const proposedAction = proposedActionFrom(incident.proposedAction);
 
     return {
       id: incident.id,
       displayId: displayIncidentId(incident.id),
       severity: severityLabel(incident.severity),
       signature: incident.errorMessage || incident.logs[0]?.message || incident.title,
-      service: incident.serviceName === "default" ? incident.project.name : incident.serviceName,
+      project: incident.project.name,
       volume: incident._count.logs,
       createdAt: incident.createdAt.toISOString(),
       status: incident.status,
+      proposedAction,
       humanApprovalStatus: incident.humanApprovalStatus,
       reviewedBy: incident.reviewedBy,
       target: getString(payload, "targetFilePath") ?? targetFromStackTrace(stackTrace),
@@ -219,8 +221,8 @@ export async function getUserIncident(userId: string, incidentId: string): Promi
   return {
     id: incident.id,
     displayId: displayIncidentId(incident.id),
-    title: incident.title.replace(`[${incident.serviceName}] `, ""),
-    service: incident.serviceName === "default" ? incident.project.name : incident.serviceName,
+    title: incident.title.replace(`[${incident.project.name}] `, ""),
+    project: incident.project.name,
     severity: severityLabel(incident.severity),
     timestamp: incident.createdAt.toISOString(),
     updatedAt: incident.updatedAt.toISOString(),

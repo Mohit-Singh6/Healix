@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { CheckCircle2, Copy, ExternalLink, LoaderCircle, Plus, RotateCw } from "lucide-react";
-import { createService } from "@/src/app/dashboard/actions";
+import { createProject } from "@/src/app/dashboard/actions";
 
 type DeploymentProvider = "NONE" | "VERCEL" | "RENDER" | "CUSTOM";
 
@@ -48,7 +48,7 @@ function FormField({
   );
 }
 
-export default function ServiceConfigForm({
+export default function ProjectConfigForm({
   installationId,
   owner,
   repo,
@@ -60,8 +60,8 @@ export default function ServiceConfigForm({
   repo: string;
   branch: string;
   initialResult?: {
-    serviceId: string;
-    serviceName: string;
+    projectId: string;
+    projectName: string;
     webhookUrl: string;
     prUrl: string | null;
     prStatus: string | null;
@@ -71,8 +71,8 @@ export default function ServiceConfigForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [result, setResult] = useState<{
-    serviceId: string;
-    serviceName: string;
+    projectId: string;
+    projectName: string;
     webhookUrl: string;
   } | null>(null);
   const [generatedPrUrl, setGeneratedPrUrl] = useState<string | null>(null);
@@ -82,26 +82,26 @@ export default function ServiceConfigForm({
   const displayedResult = result ?? initialResult;
   const displayedPrUrl = generatedPrUrl ?? initialResult?.prUrl ?? null;
 
-  async function submitService(event: FormEvent<HTMLFormElement>) {
+  async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     setFormError("");
 
     try {
-      const response = await createService(new FormData(event.currentTarget));
+      const response = await createProject(new FormData(event.currentTarget));
       if (!response.success) {
         setFormError(response.error);
         return;
       }
 
       setResult({
-        serviceId: response.service.id,
-        serviceName: response.service.name,
+        projectId: response.project.id,
+        projectName: response.project.name,
         webhookUrl: new URL(response.webhookUrl, window.location.origin).toString(),
       });
     } catch (error) {
-      console.error("Service registration request failed.", error);
-      setFormError("Service registration failed unexpectedly. Please try again.");
+      console.error("Project registration request failed.", error);
+      setFormError("Project registration failed unexpectedly. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -113,7 +113,7 @@ export default function ServiceConfigForm({
     setPrError("");
 
     try {
-      const response = await fetch(`/api/services/${encodeURIComponent(displayedResult.serviceId)}/auto-instrument`, {
+      const response = await fetch(`/api/projects/${encodeURIComponent(displayedResult.projectId)}/auto-instrument`, {
         method: "POST",
       });
       const data: { success?: boolean; prUrl?: string; error?: string } = await response.json();
@@ -132,8 +132,8 @@ export default function ServiceConfigForm({
   if (displayedResult) {
     return (
       <section className="mt-8 rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-6">
-        <p className="font-mono text-xs tracking-widest text-[#10B981]">SERVICE CONNECTED</p>
-        <h2 className="mt-2 text-xl font-semibold text-[#EDEDE8]">{displayedResult.serviceName}</h2>
+        <p className="font-mono text-xs tracking-widest text-[#10B981]">PROJECT CONNECTED</p>
+        <h2 className="mt-2 text-xl font-semibold text-[#EDEDE8]">{displayedResult.projectName}</h2>
         <p className="mt-2 text-sm text-[#A1A19A]">Copy this ingestion endpoint into your alert source.</p>
         <code className="mt-4 block break-all rounded border border-[#2B2A24] bg-[#121211] p-3 font-mono text-sm text-[#D4D4CE]">
           {displayedResult.webhookUrl}
@@ -145,7 +145,7 @@ export default function ServiceConfigForm({
               await navigator.clipboard.writeText(displayedResult.webhookUrl);
               setCopyMessage("Webhook URL copied.");
             } catch (error) {
-              console.error("Unable to copy the service webhook URL.", error);
+              console.error("Unable to copy the project webhook URL.", error);
               setCopyMessage("Could not copy the webhook URL. Select and copy it manually.");
             }
           }}
@@ -177,7 +177,7 @@ export default function ServiceConfigForm({
               View &amp; Merge Pull Request on GitHub <ExternalLink aria-hidden="true" size={14} />
             </a>
             <p className="mt-2 text-xs leading-relaxed text-[#A1A19A]">
-              Merge this pull request to complete error monitoring integration with your service.
+              Merge this pull request to complete error monitoring integration with your project.
             </p>
           </div>
         ) : (
@@ -218,10 +218,10 @@ export default function ServiceConfigForm({
         {formError && <p role="alert" className="mt-3 text-sm text-rose-300">{formError}</p>}
         <div className="mt-4 flex w-full justify-end">
           <Link
-            href="/services"
+            href="/projects"
             className="inline-flex items-center font-mono text-sm text-[#A1A19A] transition-colors hover:text-[#EDEDE8]"
           >
-            View services
+            View projects
           </Link>
         </div>
       </section>
@@ -229,10 +229,10 @@ export default function ServiceConfigForm({
   }
 
   return (
-    <form className="mt-8 flex flex-col gap-5 rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-6" onSubmit={submitService}>
+    <form className="mt-8 flex flex-col gap-5 rounded-lg border border-[#2B2A24] bg-[#1B1B18] p-6" onSubmit={submitProject}>
       <input type="hidden" name="githubInstallationId" value={installationId} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label="Service name" name="name" defaultValue={repo} required />
+        <FormField label="Project name" name="name" defaultValue={repo} required />
         <FormField label="Repository owner" name="repoOwner" defaultValue={owner} readOnly required />
         <FormField label="Repository name" name="repoName" defaultValue={repo} readOnly required />
         <FormField label="Default branch" name="defaultBranch" defaultValue={branch} readOnly required />
@@ -261,7 +261,7 @@ export default function ServiceConfigForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               label="Vercel resource ID"
-              name="platformServiceId"
+              name="platformProjectId"
               placeholder="prj_xxxxxxxxxxxxxxxxxxxx"
               required
               helper="Found in Vercel resource settings → General."
@@ -290,7 +290,7 @@ export default function ServiceConfigForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               label="Render Service ID"
-              name="platformServiceId"
+              name="platformProjectId"
               placeholder="srv-xxxxxxxxxxxxxxxxxxxx"
               required
               helper="Found in the URL of your Render service dashboard."
@@ -339,7 +339,7 @@ export default function ServiceConfigForm({
         disabled={isSubmitting}
         className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded bg-[#F59E0B] px-4 font-mono text-sm font-medium text-black transition-colors hover:bg-[#D97706] disabled:cursor-wait disabled:opacity-70"
       >
-        {isSubmitting ? "Registering service..." : "Create Service"}
+        {isSubmitting ? "Registering project..." : "Create Project"}
         {!isSubmitting && <Plus aria-hidden="true" size={16} />}
       </button>
     </form>
