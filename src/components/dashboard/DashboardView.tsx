@@ -452,7 +452,7 @@ export default function DashboardView({
         <MetricCell
           label="Registered Services"
           value={String(services.length)}
-          detail={`${services.length} connected to this workspace`}
+          detail={`connected to this workspace`}
         />
         <MetricCell label="Incidents Resolved" value={resolvedIncidents.toLocaleString()} detail="Resolved in your workspace" />
         <MetricCell
