@@ -33,6 +33,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
       githubInstallationId: true,
       errorTrackingPrUrl: true,
       errorTrackingPrStatus: true,
+      updatedAt: true,
     },
   });
   if (!service) {
@@ -45,6 +46,15 @@ export async function POST(_request: Request, { params }: RouteContext) {
       status: service.errorTrackingPrStatus ?? "OPEN",
     });
   }
+  if (
+    service.errorTrackingPrStatus === "ANALYZING" &&
+    Date.now() - service.updatedAt.getTime() < 10 * 60 * 1000
+  ) {
+    return NextResponse.json(
+      { success: false, error: "Repository analysis is already running for this service." },
+      { status: 409 },
+    );
+  }
   if (!service.githubInstallationId) {
     return NextResponse.json({
       success: false,
@@ -53,6 +63,10 @@ export async function POST(_request: Request, { params }: RouteContext) {
   }
 
   try {
+    await prisma.project.update({
+      where: { id: service.id },
+      data: { errorTrackingPrStatus: "ANALYZING" },
+    });
     const octokit = createInstallationGitHubClient(service.githubInstallationId);
 
     const pullRequest = await createErrorTrackingPullRequest({
@@ -62,8 +76,8 @@ export async function POST(_request: Request, { params }: RouteContext) {
       defaultBranch: service.defaultBranch,
       serviceName: service.name,
       webhookUrl: new URL(
-        `/api/incidents/webhook?apiKey=${encodeURIComponent(service.apiKey)}`,
-        _request.url,
+        `/api/telemetry/ingest/${encodeURIComponent(service.apiKey)}`,
+        "https://healix.mohits.site",
       ).toString(),
     });
 
@@ -82,6 +96,14 @@ export async function POST(_request: Request, { params }: RouteContext) {
     });
   } catch (error) {
     console.error(`Automatic error-tracking PR creation failed for service ${service.id}.`, error);
+    try {
+      await prisma.project.update({
+        where: { id: service.id },
+        data: { errorTrackingPrStatus: "FAILED" },
+      });
+    } catch (statusError) {
+      console.error(`Could not persist failed error-tracking setup status for service ${service.id}.`, statusError);
+    }
     return NextResponse.json(
       { success: false, error: errorMessage(error) },
       { status: 500 },

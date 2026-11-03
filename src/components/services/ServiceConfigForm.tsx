@@ -160,7 +160,7 @@ export default function ServiceConfigForm({
           <span className="h-px flex-1 bg-[#2B2A24]" />
         </div>
         <p className="text-sm leading-relaxed text-[#A1A19A]">
-          Automatically creates a pull request on your repository with a lightweight, zero-dependency reporter for uncaught frontend and backend errors.
+          Creates a pull request with a lightweight, zero-dependency reporter for the supported client and server entry points in your repository.
         </p>
         {displayedPrUrl ? (
           <div className="mt-4 rounded border border-emerald-900/50 bg-emerald-950/20 p-4">
@@ -209,7 +209,7 @@ export default function ServiceConfigForm({
                   disabled={isGeneratingPr}
                   className="inline-flex shrink-0 items-center gap-1.5 font-mono text-xs text-rose-200 underline hover:text-white disabled:opacity-50"
                 >
-                  <RotateCw aria-hidden="true" size={13} /> Retry
+                  <RotateCw aria-hidden="true" size={13} /> Try Again
                 </button>
               </div>
             )}

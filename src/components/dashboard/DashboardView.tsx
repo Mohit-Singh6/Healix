@@ -260,7 +260,12 @@ export default function DashboardView({
   const [formError, setFormError] = useState(() => githubErrorMessage(initialGitHubError));
   const [deploymentProvider, setDeploymentProvider] = useState<DeploymentProvider>("NONE");
   const [editingDeploymentProvider, setEditingDeploymentProvider] = useState<DeploymentProvider>("NONE");
-  const [createdService, setCreatedService] = useState<{ name: string; webhookUrl: string } | null>(null);
+  const [createdService, setCreatedService] = useState<{
+    id: string;
+    name: string;
+    webhookUrl: string;
+    prUrl: string | null;
+  } | null>(null);
   const [connectedRepository, setConnectedRepository] = useState<ConnectedRepository | null>(null);
 
   useEffect(() => {
@@ -308,8 +313,10 @@ export default function DashboardView({
 
       setServices((current) => [toServiceRow(result.service), ...current]);
       setCreatedService({
+        id: result.service.id,
         name: result.service.name,
         webhookUrl: new URL(result.webhookUrl, window.location.origin).toString(),
+        prUrl: result.service.errorTrackingPrUrl,
       });
       window.history.replaceState(null, "", window.location.pathname);
     } catch (error) {
@@ -331,7 +338,7 @@ export default function DashboardView({
     }
   }
 
-  async function handleAutoPr(service: ServiceRow) {
+  async function handleAutoPr(service: Pick<ServiceRow, "id" | "name">) {
     if (autoPrServiceId) return;
     setAutoPrServiceId(service.id);
     setAutoPrError("");
@@ -351,6 +358,9 @@ export default function DashboardView({
             ? { ...item, errorTrackingPrUrl: result.prUrl ?? null, errorTrackingPrStatus: "OPEN" }
             : item,
         ),
+      );
+      setCreatedService((current) =>
+        current?.id === service.id ? { ...current, prUrl: result.prUrl ?? null } : current,
       );
       setServiceActionMessage(`${service.name} error-tracking pull request is ready.`);
     } catch (error) {
@@ -885,6 +895,64 @@ export default function DashboardView({
                   <Copy aria-hidden="true" size={16} /> Copy Webhook URL
                 </button>
                 <p aria-live="polite" className="min-h-4 font-mono text-xs text-[#8E8E86]">{copyMessage}</p>
+                <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-wider text-[#6E6E68]">
+                  <span className="h-px flex-1 bg-[#2B2A24]" />
+                  <span>OR</span>
+                  <span className="h-px flex-1 bg-[#2B2A24]" />
+                </div>
+                <p className="text-sm leading-relaxed text-[#A1A19A]">
+                  Create a pull request with a lightweight, zero-dependency reporter for supported frontend and backend errors.
+                </p>
+                {createdService.prUrl ? (
+                  <div className="rounded border border-emerald-900/50 bg-emerald-950/20 p-4">
+                    <p className="flex items-center gap-2 text-sm font-medium text-emerald-300">
+                      <CheckCircle2 aria-hidden="true" size={16} /> Pull request generated successfully!
+                    </p>
+                    <a
+                      href={createdService.prUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center gap-1.5 font-mono text-sm text-[#F59E0B] hover:text-[#FDBA32]"
+                    >
+                      View &amp; Merge Pull Request on GitHub <ExternalLink aria-hidden="true" size={14} />
+                    </a>
+                    <p className="mt-2 text-xs leading-relaxed text-[#A1A19A]">
+                      Merge this pull request to complete error monitoring integration with your service.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-start gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleAutoPr(createdService)}
+                      disabled={autoPrServiceId === createdService.id}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded bg-[#F59E0B] px-4 font-mono text-sm font-medium text-black transition-colors hover:bg-[#D97706] disabled:cursor-wait disabled:opacity-70"
+                    >
+                      {autoPrServiceId === createdService.id ? (
+                        <>
+                          <LoaderCircle aria-hidden="true" className="animate-spin" size={16} />
+                          Creating branch and generating pull request...
+                        </>
+                      ) : "Auto-Setup Error Tracking"}
+                    </button>
+                    {autoPrServiceId === createdService.id && (
+                      <p className="text-xs text-[#8E8E86]">This usually takes a few seconds.</p>
+                    )}
+                    {autoPrError && (
+                      <div role="alert" className="flex flex-wrap items-center gap-3 rounded border border-rose-800/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
+                        <span>{autoPrError}</span>
+                        <button
+                          type="button"
+                          onClick={() => void handleAutoPr(createdService)}
+                          disabled={autoPrServiceId === createdService.id}
+                          className="inline-flex items-center gap-1.5 font-mono text-xs text-rose-200 underline hover:text-white disabled:opacity-50"
+                        >
+                          Try Again
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs leading-relaxed text-[#8E8E86]">
                   Send a JSON POST with <code className="text-[#D4D4CE]">serviceName</code>, <code className="text-[#D4D4CE]">message</code>, and <code className="text-[#D4D4CE]">stackTrace</code>.
                 </p>

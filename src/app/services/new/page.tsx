@@ -103,7 +103,7 @@ export default async function NewServicePage({
           initialResult={existingService ? {
             serviceId: existingService.id,
             serviceName: existingService.name,
-            webhookUrl: `/api/incidents/webhook?apiKey=${encodeURIComponent(existingService.apiKey)}`,
+            webhookUrl: `/api/telemetry/ingest/${encodeURIComponent(existingService.apiKey)}`,
             prUrl: existingService.errorTrackingPrUrl,
             prStatus: existingService.errorTrackingPrStatus,
           } : null}

@@ -1,5 +1,6 @@
 const defaultGroqModel = "openai/gpt-oss-120b";      // Replaces llama-3.3-70b-versatile
 const triageClassifierModel = "openai/gpt-oss-20b"; // Replaces llama-3.1-8b-instant
+export const repositoryAnalysisModel = "openai/gpt-oss-20b";
 
 // these models are replaced because the previous one's are deprecated and no longer available on groq.com. The new models are smaller, cheaper, and faster, while still being capable of performing the required tasks.
 
@@ -13,6 +14,8 @@ type SuspectFileClassificationInput = {
 export async function generateGroqJson(
   prompt: string,
   model = process.env.GROQ_MODEL || defaultGroqModel,
+  systemPrompt = "Follow the user instructions exactly. Return only a valid JSON object, without markdown fences or additional text.",
+  timeoutMs?: number,
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
@@ -28,15 +31,13 @@ export async function generateGroqJson(
     body: JSON.stringify({
       model,
       messages: [
-        {
-          role: "system",
-          content: "Follow the user instructions exactly. Return only a valid JSON object, without markdown fences or additional text.",
-        },
+        { role: "system", content: systemPrompt },
         { role: "user", content: prompt },
       ],
       response_format: { type: "json_object" },
       temperature: 0.2,
     }),
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
   });
 
   if (!response.ok) {

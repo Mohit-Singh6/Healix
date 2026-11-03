@@ -234,7 +234,7 @@ export async function createService(formData: FormData): Promise<CreateServiceRe
         errorTrackingPrUrl: null,
         errorTrackingPrStatus: null,
       },
-      webhookUrl: `/api/incidents/webhook?apiKey=${encodeURIComponent(service.apiKey)}`,
+      webhookUrl: `/api/telemetry/ingest/${encodeURIComponent(service.apiKey)}`,
     };
   } catch (error) {
     console.error("Service registration failed while saving service settings.", error);
@@ -394,5 +394,5 @@ export async function getServiceWebhookUrl(serviceId: string): Promise<string> {
   });
   if (!service) throw new Error("Service not found in your workspace.");
 
-  return `/api/incidents/webhook?apiKey=${encodeURIComponent(service.apiKey)}`;
+  return `/api/telemetry/ingest/${encodeURIComponent(service.apiKey)}`;
 }
