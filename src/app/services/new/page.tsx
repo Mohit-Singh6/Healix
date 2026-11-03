@@ -72,7 +72,13 @@ export default async function NewServicePage({
       repoOwner: { equals: repository.owner.login, mode: "insensitive" },
       repoName: { equals: repository.name, mode: "insensitive" },
     },
-    select: { id: true, name: true, apiKey: true },
+    select: {
+      id: true,
+      name: true,
+      apiKey: true,
+      errorTrackingPrUrl: true,
+      errorTrackingPrStatus: true,
+    },
   });
 
   return (
@@ -95,8 +101,11 @@ export default async function NewServicePage({
           repo={repository.name}
           branch={verifiedBranch}
           initialResult={existingService ? {
+            serviceId: existingService.id,
             serviceName: existingService.name,
             webhookUrl: `/api/incidents/webhook?apiKey=${encodeURIComponent(existingService.apiKey)}`,
+            prUrl: existingService.errorTrackingPrUrl,
+            prStatus: existingService.errorTrackingPrStatus,
           } : null}
         />
       </section>

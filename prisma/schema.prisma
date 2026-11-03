@@ -28,6 +28,8 @@ model Project {
   // GitHub Access Configuration
   githubToken          String?            // Fine-grained PAT scoped to repo (Contents: RW, PRs: RW)
   githubInstallationId String?            // Used if authenticated via GitHub App
+  errorTrackingPrUrl    String?
+  errorTrackingPrStatus String?
 
   // Cloud Platform Remediation Config (APPLY_CONFIG_PATCH)
   deploymentProvider   DeploymentProvider @default(NONE)

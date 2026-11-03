@@ -50,7 +50,11 @@ export function createProjectGitHubClient(
 
   if (!credentials.githubInstallationId) return null;
 
-  const installationId = Number(credentials.githubInstallationId);
+  return createInstallationGitHubClient(credentials.githubInstallationId);
+}
+
+export function createInstallationGitHubClient(installationIdValue: string): Octokit {
+  const installationId = Number(installationIdValue);
   if (!Number.isSafeInteger(installationId) || installationId <= 0) {
     throw new Error("The stored GitHub App installation ID is invalid.");
   }

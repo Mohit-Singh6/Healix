@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
-import { Copy, Plus } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, LoaderCircle, Plus, RotateCw } from "lucide-react";
 import { createService } from "@/src/app/dashboard/actions";
 
 type DeploymentProvider = "NONE" | "VERCEL" | "RENDER" | "CUSTOM";
@@ -59,13 +59,28 @@ export default function ServiceConfigForm({
   owner: string;
   repo: string;
   branch: string;
-  initialResult?: { serviceName: string; webhookUrl: string } | null;
+  initialResult?: {
+    serviceId: string;
+    serviceName: string;
+    webhookUrl: string;
+    prUrl: string | null;
+    prStatus: string | null;
+  } | null;
 }) {
   const [deploymentProvider, setDeploymentProvider] = useState<DeploymentProvider>("NONE");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
-  const [result, setResult] = useState<{ serviceName: string; webhookUrl: string } | null>(null);
+  const [result, setResult] = useState<{
+    serviceId: string;
+    serviceName: string;
+    webhookUrl: string;
+  } | null>(null);
+  const [generatedPrUrl, setGeneratedPrUrl] = useState<string | null>(null);
+  const [isGeneratingPr, setIsGeneratingPr] = useState(false);
+  const [prError, setPrError] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
   const displayedResult = result ?? initialResult;
+  const displayedPrUrl = generatedPrUrl ?? initialResult?.prUrl ?? null;
 
   async function submitService(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,6 +95,7 @@ export default function ServiceConfigForm({
       }
 
       setResult({
+        serviceId: response.service.id,
         serviceName: response.service.name,
         webhookUrl: new URL(response.webhookUrl, window.location.origin).toString(),
       });
@@ -88,6 +104,28 @@ export default function ServiceConfigForm({
       setFormError("Service registration failed unexpectedly. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function autoSetupErrorTracking() {
+    if (!displayedResult || isGeneratingPr) return;
+    setIsGeneratingPr(true);
+    setPrError("");
+
+    try {
+      const response = await fetch(`/api/services/${encodeURIComponent(displayedResult.serviceId)}/auto-instrument`, {
+        method: "POST",
+      });
+      const data: { success?: boolean; prUrl?: string; error?: string } = await response.json();
+      if (!response.ok || !data.success || !data.prUrl) {
+        throw new Error(data.error ?? "Could not create the pull request. Try again.");
+      }
+      setGeneratedPrUrl(data.prUrl);
+    } catch (error) {
+      console.error("Automatic error-tracking setup failed.", error);
+      setPrError(error instanceof Error ? error.message : "Could not create the pull request. Try again.");
+    } finally {
+      setIsGeneratingPr(false);
     }
   }
 
@@ -105,15 +143,78 @@ export default function ServiceConfigForm({
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(displayedResult.webhookUrl);
+              setCopyMessage("Webhook URL copied.");
             } catch (error) {
               console.error("Unable to copy the service webhook URL.", error);
-              setFormError("Could not copy the webhook URL. Select and copy it manually.");
+              setCopyMessage("Could not copy the webhook URL. Select and copy it manually.");
             }
           }}
           className="mt-4 inline-flex items-center gap-2 rounded bg-[#F59E0B] px-4 py-2 font-mono text-sm font-medium text-black hover:bg-[#D97706]"
         >
           <Copy aria-hidden="true" size={15} /> Copy webhook URL
         </button>
+        <p aria-live="polite" className="mt-2 min-h-4 font-mono text-xs text-[#8E8E86]">{copyMessage}</p>
+        <div className="my-5 flex items-center gap-3 font-mono text-xs uppercase tracking-wider text-[#6E6E68]">
+          <span className="h-px flex-1 bg-[#2B2A24]" />
+          <span>OR</span>
+          <span className="h-px flex-1 bg-[#2B2A24]" />
+        </div>
+        <p className="text-sm leading-relaxed text-[#A1A19A]">
+          Automatically creates a pull request on your repository with a lightweight, zero-dependency reporter for uncaught frontend and backend errors.
+        </p>
+        {displayedPrUrl ? (
+          <div className="mt-4 rounded border border-emerald-900/50 bg-emerald-950/20 p-4">
+            <p className="flex items-center gap-2 text-sm font-medium text-emerald-300">
+              <CheckCircle2 aria-hidden="true" size={16} />
+              Pull request generated successfully!
+            </p>
+            <a
+              href={displayedPrUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex items-center gap-1.5 font-mono text-sm text-[#F59E0B] hover:text-[#FDBA32]"
+            >
+              View &amp; Merge Pull Request on GitHub <ExternalLink aria-hidden="true" size={14} />
+            </a>
+            <p className="mt-2 text-xs leading-relaxed text-[#A1A19A]">
+              Merge this pull request to complete error monitoring integration with your service.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => void autoSetupErrorTracking()}
+              disabled={isGeneratingPr}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded bg-[#F59E0B] px-4 font-mono text-sm font-medium text-black transition-colors hover:bg-[#D97706] disabled:cursor-wait disabled:opacity-70"
+            >
+              {isGeneratingPr ? (
+                <>
+                  <LoaderCircle aria-hidden="true" className="animate-spin" size={16} />
+                  Creating branch and generating pull request...
+                </>
+              ) : (
+                "Auto-Setup Error Tracking"
+              )}
+            </button>
+            {isGeneratingPr && (
+              <p className="mt-2 text-xs text-[#8E8E86]">This usually takes a few seconds.</p>
+            )}
+            {prError && (
+              <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded border border-rose-800/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
+                <span>{prError}</span>
+                <button
+                  type="button"
+                  onClick={() => void autoSetupErrorTracking()}
+                  disabled={isGeneratingPr}
+                  className="inline-flex shrink-0 items-center gap-1.5 font-mono text-xs text-rose-200 underline hover:text-white disabled:opacity-50"
+                >
+                  <RotateCw aria-hidden="true" size={13} /> Retry
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {formError && <p role="alert" className="mt-3 text-sm text-rose-300">{formError}</p>}
         <Link href="/services" className="ml-4 font-mono text-sm text-[#A1A19A] hover:text-[#EDEDE8]">
           View services
