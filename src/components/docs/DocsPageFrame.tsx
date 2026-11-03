@@ -86,15 +86,15 @@ function PageLinkCard({
   return (
     <Link
       href={href}
-      className={`group flex min-h-16 flex-col justify-center gap-1 rounded-md border border-[#2B2A24] bg-[#111110] px-3 py-2.5 transition-colors hover:border-[#F59E0B]/50 hover:bg-[#171715] ${
-        isNext ? "items-end text-right" : "items-start"
+      className={`group flex min-h-16 w-full max-w-80 flex-col justify-center gap-1 rounded-md border border-[#2B2A24] bg-[#111110] px-3 py-2.5 transition-colors hover:border-[#F59E0B]/50 hover:bg-[#171715] ${
+        isNext ? "items-end justify-self-end text-right" : "items-start justify-self-start"
       }`}
     >
-      <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[#8E8E86] group-hover:text-[#F59E0B]">
-        {isNext ? "Next page" : "Previous page"}
-        {isNext ? <ArrowRight aria-hidden="true" size={12} /> : <ArrowLeft aria-hidden="true" size={12} />}
+      <span className="flex items-center gap-1.5 font-mono text-[13px] normal-case text-[#8E8E86] group-hover:text-[#F59E0B]">
+        {isNext ? "Next Page" : "Previous Page"}
+        {isNext ? <ArrowRight aria-hidden="true" size={14} /> : <ArrowLeft aria-hidden="true" size={14} />}
       </span>
-      <span className="text-xs font-medium text-[#EDEDE8]">{title}</span>
+      <span className="text-[15px] font-medium text-[#EDEDE8]">{title}</span>
     </Link>
   );
 }
@@ -168,13 +168,13 @@ export default function DocsPageFrame({
 
           <div className="mb-7 flex items-center justify-between gap-3 border-y border-[#22221F] py-2.5 lg:mb-9 lg:border-0 lg:py-0">
             {previous ? (
-              <Link href={previous.href} className="inline-flex items-center gap-1 text-[11px] text-[#A1A19A] transition-colors hover:text-[#EDEDE8]">
-                <ChevronLeft aria-hidden="true" size={12} /> Previous: {previous.title}
+              <Link href={previous.href} className="inline-flex items-center gap-1.5 text-sm text-[#A1A19A] transition-colors hover:text-[#EDEDE8]">
+                <ChevronLeft aria-hidden="true" size={16} /> Previous
               </Link>
             ) : <span />}
             {next ? (
-              <Link href={next.href} className="ml-auto inline-flex items-center gap-1 text-[11px] text-[#A1A19A] transition-colors hover:text-[#EDEDE8]">
-                Next: {next.title} <ChevronRight aria-hidden="true" size={12} />
+              <Link href={next.href} className="ml-auto inline-flex items-center gap-1.5 text-sm text-[#A1A19A] transition-colors hover:text-[#EDEDE8]">
+                Next <ChevronRight aria-hidden="true" size={16} />
               </Link>
             ) : <span />}
           </div>
@@ -191,12 +191,12 @@ export default function DocsPageFrame({
               {guideIndex === 0 && next ? (
                 <Link
                   href={next.href}
-                  className="group flex min-h-16 flex-col items-end justify-center gap-1 rounded-md border border-[#F59E0B]/40 bg-[#F59E0B] px-3 py-2.5 text-right transition-colors hover:bg-[#D97706]"
+                  className="group flex min-h-16 w-full max-w-80 flex-col items-end justify-center justify-self-end gap-1 rounded-md border border-[#F59E0B]/40 bg-[#F59E0B] px-3 py-2.5 text-right transition-colors hover:bg-[#D97706]"
                 >
-                  <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-black/70">
+                  <span className="flex items-center gap-1.5 font-mono text-[13px] text-black/70">
                     Start setting up services <ArrowRight aria-hidden="true" size={12} />
                   </span>
-                  <span className="text-xs font-semibold text-black">Connecting Your Service</span>
+                  <span className="text-[15px] font-semibold text-black">Connecting Your Service</span>
                 </Link>
               ) : (
                 <PageLinkCard href={next?.href} direction="next" title={next?.title ?? ""} />
