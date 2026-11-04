@@ -20,6 +20,127 @@ const postMortemOutputSchema = z.object({
   markdownContent: z.string().min(1),
 });
 
+export function applyReplacementBlock(
+  sourceCode: string,
+  searchBlock: string,
+  replaceBlock: string,
+): { success: boolean; updatedCode: string; error?: string } {
+  const normalizedSource = sourceCode.replace(/\r\n?/g, "\n");
+  const normalizedSearch = searchBlock.replace(/\r\n?/g, "\n").trim();
+  const normalizedReplace = replaceBlock.replace(/\r\n?/g, "\n");
+  const alignReplacementIndent = (replacement: string, matchIndex: number) => {
+    const lineStart = normalizedSource.lastIndexOf("\n", matchIndex - 1) + 1;
+    const sourceIndent = normalizedSource.slice(lineStart, matchIndex);
+    if (!/^[\t ]*$/.test(sourceIndent)) return replacement;
+
+    const lines = replacement.split("\n");
+    const firstNonEmptyLine = lines.find((line) => line.trim());
+    const replacementIndent = firstNonEmptyLine?.match(/^[\t ]*/)?.[0] ?? "";
+    let firstNonEmptyLinePending = true;
+    return lines
+      .map((line) => {
+        if (!line.trim()) return "";
+        const relativeLine = replacementIndent && line.startsWith(replacementIndent)
+          ? line.slice(replacementIndent.length)
+          : line.trimStart();
+        if (firstNonEmptyLinePending) {
+          firstNonEmptyLinePending = false;
+          return relativeLine;
+        }
+        return `${sourceIndent}${relativeLine}`;
+      })
+      .join("\n");
+  };
+  const notFound = () => ({
+    success: false,
+    updatedCode: sourceCode,
+    error: `Replacement block not found in file. Search snippet: "${normalizedSearch.slice(0, 80)}..."`,
+  });
+
+  if (!normalizedSearch) return notFound();
+
+  const exactIndex = normalizedSource.indexOf(normalizedSearch);
+  if (exactIndex !== -1) {
+    if (normalizedSource.indexOf(normalizedSearch, exactIndex + normalizedSearch.length) !== -1) {
+      return {
+        success: false,
+        updatedCode: sourceCode,
+        error: "Replacement block matched multiple locations; refusing an ambiguous patch.",
+      };
+    }
+    return {
+      success: true,
+      updatedCode:
+        normalizedSource.slice(0, exactIndex) +
+        alignReplacementIndent(normalizedReplace, exactIndex) +
+        normalizedSource.slice(exactIndex + normalizedSearch.length),
+    };
+  }
+
+  const escapedSearch = normalizedSearch
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\s+/g, "\\s+");
+  const flexibleWhitespacePattern = new RegExp(escapedSearch, "gm");
+  const flexibleMatches = [...normalizedSource.matchAll(flexibleWhitespacePattern)];
+  if (flexibleMatches.length > 1) {
+    return {
+      success: false,
+      updatedCode: sourceCode,
+      error: "Whitespace-tolerant replacement matched multiple locations; refusing an ambiguous patch.",
+    };
+  }
+  if (flexibleMatches.length === 1) {
+    const matchIndex = flexibleMatches[0].index;
+    if (matchIndex === undefined) return notFound();
+    const alignedReplacement = alignReplacementIndent(normalizedReplace, matchIndex);
+    return {
+      success: true,
+      updatedCode: normalizedSource.replace(flexibleWhitespacePattern, () => alignedReplacement),
+    };
+  }
+
+  const sourceLines = normalizedSource.split("\n");
+  const searchLines = normalizedSearch.split("\n").map((line) => line.trim());
+  const matchingStarts: number[] = [];
+
+  for (let start = 0; start <= sourceLines.length - searchLines.length; start += 1) {
+    if (searchLines.every((line, offset) => sourceLines[start + offset].trim() === line)) {
+      matchingStarts.push(start);
+    }
+  }
+
+  if (matchingStarts.length !== 1) {
+    return matchingStarts.length > 1
+      ? {
+          success: false,
+          updatedCode: sourceCode,
+          error: "Trimmed-line replacement matched multiple locations; refusing an ambiguous patch.",
+        }
+      : notFound();
+  }
+
+  const start = matchingStarts[0];
+  const leadingWhitespace = sourceLines[start].match(/^[\t ]*/)?.[0] ?? "";
+  const replacementLines = normalizedReplace.split("\n");
+  const firstReplacementLine = replacementLines.find((line) => line.trim());
+  const replacementIndent = firstReplacementLine?.match(/^[\t ]*/)?.[0] ?? "";
+  const indentedReplacement = replacementLines
+    .map((line) => {
+      if (!line.trim()) return "";
+      const relativeLine = replacementIndent && line.startsWith(replacementIndent)
+        ? line.slice(replacementIndent.length)
+        : line.trimStart();
+      return `${leadingWhitespace}${relativeLine}`;
+    })
+    .join("\n");
+  sourceLines.splice(start, searchLines.length, indentedReplacement);
+
+  return {
+    success: true,
+    updatedCode: sourceLines.join("\n"),
+  };
+}
+
 async function getRepositoryFilePaths(
   octokit: NonNullable<ReturnType<typeof createProjectGitHubClient>>,
   owner: string,
@@ -308,14 +429,13 @@ export async function executeRemediationNode(
             );
           }
 
-          if (!updated.includes(searchBlock)) {
+          const replacement = applyReplacementBlock(updated, searchBlock, replaceBlock);
+          if (!replacement.success) {
             throw new Error(
-              `[Node E] Replacement block #${i + 1} not found in ${targetFilePath}. Snippet: "${searchBlock.slice(0, 60)}..."`
+              `[Node E] Replacement block #${i + 1} failed in ${targetFilePath}. ${replacement.error}`,
             );
           }
-
-          // Replace the exact matching instance
-          updated = updated.replace(searchBlock, replaceBlock);
+          updated = replacement.updatedCode;
         }
 
         patchedContent = updated;
