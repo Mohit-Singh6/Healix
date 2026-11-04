@@ -10,6 +10,7 @@ export default async function DashboardPage({
     repo?: string;
     branch?: string;
     github_error?: string;
+    addProject?: string;
   }>;
 }) {
   const data = await getDashboardData();
@@ -19,6 +20,7 @@ export default async function DashboardPage({
       view="overview"
       {...data}
       initialGitHubError={query.github_error}
+      initialOpenAddProject={query.addProject === "true"}
     />
   );
 }

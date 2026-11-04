@@ -51,11 +51,19 @@ function toProjectRow(project: DashboardProject): ProjectRow {
 }
 
 type DashboardViewMode = "overview" | "projects" | "incidents";
-type IncidentFilter = "investigating" | "approval" | "solved" | "dismissed";
+type IncidentFilter =
+  | "investigating"
+  | "approval"
+  | "no-action"
+  | "manual-intervention"
+  | "solved"
+  | "dismissed";
 
 const incidentFilterOptions: { id: IncidentFilter; label: string }[] = [
   { id: "investigating", label: "Investigating" },
-  { id: "approval", label: "Action required" },
+  { id: "approval", label: "Approval required" },
+  { id: "no-action", label: "No action" },
+  { id: "manual-intervention", label: "Manual intervention" },
   { id: "solved", label: "Solved" },
   { id: "dismissed", label: "Dismissed" },
 ];
@@ -75,16 +83,25 @@ function incidentFilterCount(incidents: DashboardIncident[], filter: IncidentFil
   return incidents.filter((incident) => matchesIncidentFilter(incident, filter)).length;
 }
 
+function requiresPullRequestApproval(incident: DashboardIncident): boolean {
+  return incident.status === "PENDING_APPROVAL" &&
+    incident.humanApprovalStatus === "PENDING" &&
+    (incident.proposedAction === "REVERT_PR" || incident.proposedAction === "BUGFIX_PR");
+}
+
 function matchesIncidentFilter(incident: DashboardIncident, filter: IncidentFilter): boolean {
   switch (filter) {
     case "investigating":
-      return incident.status === "MITIGATING" ||
-        (incident.status === "INVESTIGATING" && incident.proposedAction === null);
+      return incident.proposedAction === null &&
+        (incident.status === "MITIGATING" || incident.status === "INVESTIGATING");
     case "approval":
-      return incident.status !== "RESOLVED" &&
-        incident.status !== "DISMISSED" &&
-        ((incident.status === "PENDING_APPROVAL" && incident.proposedAction !== "NO_ACTION") ||
-          incident.proposedAction === "MANUAL_INTERVENTION");
+      return requiresPullRequestApproval(incident);
+    case "no-action":
+      return incident.proposedAction === "NO_ACTION" && incident.status !== "DISMISSED";
+    case "manual-intervention":
+      return incident.proposedAction === "MANUAL_INTERVENTION" &&
+        incident.status !== "RESOLVED" &&
+        incident.status !== "DISMISSED";
     case "solved":
       return incident.status === "RESOLVED" ||
         (incident.status !== "DISMISSED" && incident.proposedAction === "NO_ACTION");
@@ -156,7 +173,7 @@ function incidentOutcome(incident: DashboardIncident) {
   if (incident.proposedAction === "NO_ACTION") {
     return {
       label: "No action needed",
-      detail: "Automated triage recommends no change",
+      detail: "Healix recommends no action",
       tone: "muted" as const,
       icon: <CheckCircle2 aria-hidden="true" size={14} />,
     };
@@ -164,8 +181,8 @@ function incidentOutcome(incident: DashboardIncident) {
 
   if (incident.proposedAction === "MANUAL_INTERVENTION") {
     return {
-      label: "Action Required",
-      detail: "Manual follow-up is needed",
+      label: "Manual intervention",
+      detail: "Healix recommends manual follow-up",
       tone: "high" as const,
       icon: <CircleAlert aria-hidden="true" size={14} />,
     };
@@ -254,6 +271,7 @@ export default function DashboardView({
   activeIncidents,
   githubInstallationIds = [],
   initialGitHubError,
+  initialOpenAddProject = false,
 }: {
   view: DashboardViewMode;
   initialProjects: DashboardProject[];
@@ -263,9 +281,12 @@ export default function DashboardView({
   activeIncidents: number;
   githubInstallationIds?: string[];
   initialGitHubError?: string;
+  initialOpenAddProject?: boolean;
 }) {
   const [projects, setProjects] = useState(initialProjects.map(toProjectRow));
-  const [isAddProjectOpen, setIsAddProjectOpen] = useState(Boolean(initialGitHubError));
+  const [isAddProjectOpen, setIsAddProjectOpen] = useState(
+    Boolean(initialGitHubError) || initialOpenAddProject,
+  );
   const [editingProject, setEditingProject] = useState<ProjectRow | null>(null);
   const [isUpdatingProject, setIsUpdatingProject] = useState(false);
   const [projectError, setProjectError] = useState("");
@@ -304,6 +325,17 @@ export default function DashboardView({
       document.documentElement.style.overflow = previousDocumentOverflow;
     };
   }, [isAddProjectOpen]);
+
+  useEffect(() => {
+    function openAddProject() {
+      setConnectedRepository(null);
+      setFormError("");
+      setIsAddProjectOpen(true);
+    }
+
+    window.addEventListener("healix:open-add-project", openAddProject);
+    return () => window.removeEventListener("healix:open-add-project", openAddProject);
+  }, []);
 
   useEffect(() => () => {
     if (copyMessageTimeout.current !== null) {
@@ -395,11 +427,10 @@ export default function DashboardView({
   }
 
   function closeProjectDialog() {
-    if (!createdProject && !window.confirm("Close this project setup? Any unsaved changes will be lost.")) return;
-
     setIsAddProjectOpen(false);
     setFormError("");
     setCreatedProject(null);
+    setConnectedRepository(null);
     setDeploymentProvider("NONE");
     window.history.replaceState(null, "", window.location.pathname);
   }
@@ -801,16 +832,16 @@ export default function DashboardView({
           )}
           {displayedIncidents.map((incident) => {
             const outcome = incidentOutcome(incident);
-            const actionRequired = incident.status !== "RESOLVED" &&
+            const approvalRequired = requiresPullRequestApproval(incident);
+            const manualInterventionRequired = incident.status !== "RESOLVED" &&
               incident.status !== "DISMISSED" &&
-              incident.proposedAction !== "NO_ACTION" &&
-              (incident.status === "PENDING_APPROVAL" ||
-                incident.proposedAction === "MANUAL_INTERVENTION");
+              incident.proposedAction === "MANUAL_INTERVENTION";
+            const needsAttention = approvalRequired || manualInterventionRequired;
             return (
               <article
                 key={incident.id}
                 className={`group mb-3 flex flex-col justify-between gap-4 rounded-lg border p-5 transition-all md:flex-row md:items-center ${
-                  actionRequired
+                  needsAttention
                     ? "border-[#F59E0B]/25 bg-[#1B1A16] hover:border-[#F59E0B]/40 hover:bg-[#1D1B15]"
                     : "border-[#262520] bg-[#181816] hover:border-[#383730] hover:bg-[#1C1C19]"
                 }`}
@@ -828,7 +859,7 @@ export default function DashboardView({
                     <span className="rounded border border-[#2B2A24] bg-[#141412] px-2 py-0.5 font-mono text-xs text-[#A1A19A]">{incident.project}</span>
                     <StatusBadge tone={outcome.tone}>
                       {outcome.icon}
-                      {actionRequired ? "Action Required" : outcome.label}
+                      {approvalRequired ? "Approval Required" : outcome.label}
                     </StatusBadge>
                   </div>
                   <p className="mt-1 truncate text-sm font-semibold tracking-tight text-[#EDEDE8] md:text-base" title={incident.signature}>

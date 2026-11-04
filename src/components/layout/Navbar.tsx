@@ -115,7 +115,12 @@ export default function Navbar({ user }: { user: NavbarUser | null }) {
             <InternalLinks pathname={pathname} />
             <div className="order-1 flex shrink-0 items-center gap-2 sm:order-none sm:gap-3">
               <Link
-                href="/projects"
+                href="/dashboard?addProject=true"
+                onClick={(event) => {
+                  if (pathname !== "/dashboard") return;
+                  event.preventDefault();
+                  window.dispatchEvent(new Event("healix:open-add-project"));
+                }}
                 className="inline-flex items-center gap-1.5 rounded-md border border-[#33322C] bg-[#1E1E1B] px-3.5 py-1.5 font-mono text-sm text-[#EDEDE8] transition-all hover:border-[#F59E0B]/50 hover:bg-[#282723]"
               >
                 <span aria-hidden="true">+</span> Add Project
