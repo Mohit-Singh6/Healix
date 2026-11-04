@@ -635,10 +635,10 @@ export default function DashboardView({
                       rel="noopener noreferrer"
                       title="Review setup pull request"
                       aria-label={`View error-tracking pull request for ${project.name}`}
-                      className="inline-flex items-center justify-center rounded border border-[#2B2A24] p-2 text-emerald-400 transition-colors hover:bg-[#232320] hover:text-emerald-300"
+                      className="inline-flex h-[34px] items-center justify-center gap-1.5 whitespace-nowrap rounded border border-[#2B2A24] px-2 font-mono text-xs text-emerald-400 transition-colors hover:bg-[#232320] hover:text-emerald-300"
                     >
                       <ExternalLink aria-hidden="true" size={16} />
-                      <p className="sr-only">View PR</p>
+                      <span>View PR</span>
                     </a>
                   ) : ["OPEN", "MERGED", "COMPLETED"].includes(project.errorTrackingPrStatus ?? "") ? null : (
                     <button
@@ -648,14 +648,12 @@ export default function DashboardView({
                       title={autoPrProjectId === project.id ? "Creating setup pull request..." : "Auto-setup error tracking"}
                       aria-label={`${autoPrProjectId === project.id ? "Creating" : "Generate"} error-tracking pull request for ${project.name}`}
                       aria-busy={autoPrProjectId === project.id}
-                      className="inline-flex items-center justify-center rounded border border-[#2B2A24] p-2 text-[#8E8E86] transition-colors hover:bg-[#232320] hover:text-[#F59E0B] disabled:cursor-wait disabled:opacity-50"
+                      className="inline-flex h-[34px] items-center justify-center gap-1.5 whitespace-nowrap rounded border border-[#2B2A24] px-2 font-mono text-xs text-[#8E8E86] transition-colors hover:bg-[#232320] hover:text-[#F59E0B] disabled:cursor-wait disabled:opacity-50"
                     >
                       {autoPrProjectId === project.id
                         ? <LoaderCircle aria-hidden="true" className="animate-spin" size={16} />
-                        : <div>
-                          <Sparkles aria-hidden="true" size={16} />
-                          <p className="sr-only">Setup PR</p>
-                          </div>}
+                        : <Sparkles aria-hidden="true" size={16} />}
+                      <span>Setup PR</span>
                     </button>
                   )}
                   <button
