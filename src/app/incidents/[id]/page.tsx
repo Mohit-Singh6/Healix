@@ -9,17 +9,20 @@ export default async function IncidentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const isDevelopment = process.env.NODE_ENV === "development";
   const session = await auth();
-  if (!session?.user?.email) redirect("/auth");
+  if (!session?.user?.email && !isDevelopment) redirect("/auth");
 
   const { id } = await params;
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-  if (!user) redirect("/auth");
+  const user = session?.user?.email
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      })
+    : null;
+  if (!user && !isDevelopment) redirect("/auth");
 
-  const incident = await getUserIncident(user.id, id);
+  const incident = await getUserIncident(user?.id ?? null, id);
   if (!incident) notFound();
 
   return <IncidentWorkbench key={id} incidentId={id} incident={incident} />;

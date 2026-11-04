@@ -4,18 +4,22 @@ import { prisma } from "@/src/lib/prisma";
 import { listUserIncidents } from "@/src/lib/incidents";
 
 export async function getDashboardData() {
+  const isDevelopment = process.env.NODE_ENV === "development";
   const session = await auth();
-  if (!session?.user?.email) redirect("/auth");
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-  if (!user) redirect("/auth");
+  const user = session?.user?.email
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      })
+    : null;
+  if (!user && !isDevelopment) redirect("/auth");
+
+  const userId = user?.id ?? null;
 
   const [projects, installationRows, incidents, resolvedIncidents, pendingApprovals, activeIncidents] = await Promise.all([
     prisma.project.findMany({
-      where: { userId: user.id },
+      where: userId ? { userId } : {},
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -35,14 +39,17 @@ export async function getDashboardData() {
       },
     }),
     prisma.project.findMany({
-      where: { userId: user.id, githubInstallationId: { not: null } },
+      where: {
+        ...(userId ? { userId } : {}),
+        githubInstallationId: { not: null },
+      },
       distinct: ["githubInstallationId"],
       select: { githubInstallationId: true },
     }),
-    listUserIncidents(user.id),
+    listUserIncidents(userId),
     prisma.incident.count({
       where: {
-        project: { is: { userId: user.id } },
+        ...(userId ? { project: { is: { userId } } } : {}),
         OR: [
           { status: "RESOLVED" },
           { status: { not: "DISMISSED" }, proposedAction: "NO_ACTION" },
@@ -51,14 +58,14 @@ export async function getDashboardData() {
     }),
     prisma.incident.count({
       where: {
-        project: { is: { userId: user.id } },
+        ...(userId ? { project: { is: { userId } } } : {}),
         status: "PENDING_APPROVAL",
         proposedAction: { not: "NO_ACTION" },
       },
     }),
     prisma.incident.count({
       where: {
-        project: { is: { userId: user.id } },
+        ...(userId ? { project: { is: { userId } } } : {}),
         OR: [
           { status: "PENDING_APPROVAL", proposedAction: { not: "NO_ACTION" } },
           { status: "MITIGATING" },

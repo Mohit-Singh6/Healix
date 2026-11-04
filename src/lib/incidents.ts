@@ -107,11 +107,10 @@ function actionSummary(
   }
 }
 
-export async function listUserIncidents(userId: string): Promise<DashboardIncident[]> {
+export async function listUserIncidents(userId: string | null): Promise<DashboardIncident[]> {
   const records = await prisma.incident.findMany({
-    where: { project: { is: { userId } } },
+    where: userId ? { project: { is: { userId } } } : {},
     orderBy: { createdAt: "desc" },
-    take: 100,
     select: {
       id: true,
       title: true,
@@ -156,9 +155,12 @@ export async function listUserIncidents(userId: string): Promise<DashboardIncide
   });
 }
 
-export async function getUserIncident(userId: string, incidentId: string): Promise<IncidentData | null> {
+export async function getUserIncident(userId: string | null, incidentId: string): Promise<IncidentData | null> {
   const incident = await prisma.incident.findFirst({
-    where: { id: incidentId, project: { is: { userId } } },
+    where: {
+      id: incidentId,
+      ...(userId ? { project: { is: { userId } } } : {}),
+    },
     select: {
       id: true,
       title: true,
