@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, type Part } from "@google/genai";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { createProjectGitHubClient } from "../../lib/github-app";
@@ -61,11 +61,50 @@ const diagnosisOutputSchema = z.object({
 });
 
 function stripMarkdownFence(text: string): string {
-  return text
+  let cleaned = text
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();
+
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+
+  return cleaned.trim();
+}
+
+async function withTransientRetry<T>(
+  fn: () => Promise<T>,
+  retries = 2,
+  delayMs = 2000,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    const status = typeof error === "object" && error !== null && "status" in error
+      ? error.status
+      : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+    const normalizedMessage = message.toLowerCase();
+    const isTransient =
+      status === 503 ||
+      normalizedMessage.includes("503") ||
+      normalizedMessage.includes("high demand") ||
+      normalizedMessage.includes("unavailable");
+
+    if (!isTransient || retries <= 0) throw error;
+
+    const jitter = Math.floor(Math.random() * 500) - 250;
+    const actualDelay = Math.max(1000, delayMs + jitter);
+    console.warn(
+      `[Node C] Transient 503/UNAVAILABLE encountered. Retrying in ${actualDelay}ms (${retries} retries left)...`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, actualDelay));
+    return withTransientRetry(fn, retries - 1, delayMs * 2);
+  }
 }
 
 function logReplacementBlocks(
@@ -387,9 +426,9 @@ async function runGeminiInvestigation(
 
   let geminiCallCount = 1;
   console.log(`[Node C] Gemini call #${geminiCallCount}: starting investigation.`);
-  let response = await chat.sendMessage({
+  let response = await withTransientRetry(() => chat.sendMessage({
     message: "Begin the investigation. Inspect relevant dependencies with the available tools before returning the final diagnosis.",
-  });
+  }));
   let toolTurns = 0;
   while (response.functionCalls?.length) {
     const calls = response.functionCalls;
@@ -399,7 +438,7 @@ async function runGeminiInvestigation(
 
     console.log(`[Node C] Gemini requested ${calls.length} tool call(s).`);
     console.log(`[Node C] Tool calls: ${calls.map((call) => call.name).join(", ")}`);
-    const functionResponses = [];
+    const functionResponses: Part[] = [];
     for (const call of calls) {
       if (!call.name) throw new Error("Gemini returned a tool call without a name.");
       toolTurns += 1;
@@ -439,8 +478,12 @@ async function runGeminiInvestigation(
     geminiCallCount += 1;
     console.log(`[Node C] Gemini call #${geminiCallCount}: reviewing tool results.`);
     // print the output of the calls
-    console.log(`[Node C] Tool outputs:\n${functionResponses.map((r) => `--- ${r.functionResponse.name} ---\n${r.functionResponse.response.content}`).join("\n\n")}`);
-    response = await chat.sendMessage({ message: functionResponses });
+    console.log(`[Node C] Tool outputs:\n${functionResponses.map((part) =>
+      `--- ${part.functionResponse?.name ?? "unknown"} ---\n${part.functionResponse?.response?.content ?? ""}`
+    ).join("\n\n")}`);
+    response = await withTransientRetry(() =>
+      chat.sendMessage({ message: functionResponses }),
+    );
   }
 
   if (!response.text?.trim()) {
@@ -452,9 +495,9 @@ async function runGeminiInvestigation(
     if (!(error instanceof z.ZodError)) throw error;
 
     console.warn("[Node C] Gemini returned a diagnosis that failed schema validation; requesting one correction.", error.issues);
-    const correction = await chat.sendMessage({
+    const correction = await withTransientRetry(() => chat.sendMessage({
       message: `Your previous JSON did not match the required diagnosis schema. Correct only the JSON output; do not call tools. Validation issues: ${JSON.stringify(error.issues)}. Return the complete diagnosis object with exactly incidentSeverity, hypothesis, proposedAction, and actionPayload. A deliberate test error must use proposedAction "NO_ACTION" and may include noFixReason "TEST_ERROR" and noFixExplanation.`,
-    });
+    }));
     if (correction.functionCalls?.length || !correction.text?.trim()) {
       throw new Error("Gemini did not return a corrected diagnosis JSON object.");
     }
