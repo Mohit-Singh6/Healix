@@ -633,25 +633,29 @@ export default function DashboardView({
                       href={project.errorTrackingPrUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      title="View PR"
+                      title="Review setup pull request"
                       aria-label={`View error-tracking pull request for ${project.name}`}
                       className="inline-flex items-center justify-center rounded border border-[#2B2A24] p-2 text-emerald-400 transition-colors hover:bg-[#232320] hover:text-emerald-300"
                     >
                       <ExternalLink aria-hidden="true" size={16} />
+                      <p className="sr-only">View PR</p>
                     </a>
                   ) : ["OPEN", "MERGED", "COMPLETED"].includes(project.errorTrackingPrStatus ?? "") ? null : (
                     <button
                       type="button"
                       onClick={() => void handleAutoPr(project)}
                       disabled={autoPrProjectId === project.id}
-                      title={autoPrProjectId === project.id ? "Generating PR" : "Generate PR"}
+                      title={autoPrProjectId === project.id ? "Creating setup pull request..." : "Auto-setup error tracking"}
                       aria-label={`${autoPrProjectId === project.id ? "Creating" : "Generate"} error-tracking pull request for ${project.name}`}
                       aria-busy={autoPrProjectId === project.id}
                       className="inline-flex items-center justify-center rounded border border-[#2B2A24] p-2 text-[#8E8E86] transition-colors hover:bg-[#232320] hover:text-[#F59E0B] disabled:cursor-wait disabled:opacity-50"
                     >
                       {autoPrProjectId === project.id
                         ? <LoaderCircle aria-hidden="true" className="animate-spin" size={16} />
-                        : <Sparkles aria-hidden="true" size={16} />}
+                        : <div>
+                          <Sparkles aria-hidden="true" size={16} />
+                          <p className="sr-only">Setup PR</p>
+                          </div>}
                     </button>
                   )}
                   <button
@@ -974,7 +978,7 @@ export default function DashboardView({
                       {autoPrProjectId === createdProject.id ? (
                         <>
                           <LoaderCircle aria-hidden="true" className="animate-spin" size={16} />
-                          Creating branch and generating pull request...
+                          Creating setup pull request...
                         </>
                       ) : "Auto-Setup Error Tracking"}
                     </button>
