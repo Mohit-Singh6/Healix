@@ -7,8 +7,11 @@ import { prisma } from "../../lib/prisma";
 import { decryptProjectSecret } from "../../lib/project-secrets";
 import { createProjectGitHubClient } from "../../lib/github-app";
 import { generateGroqJson } from "../groq";
+import { resolveRepositoryPath } from "../utils/pathResolver";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const MAX_CACHED_REPOSITORY_TREES = 20;
+const repositoryTreeCache = new Map<string, Promise<string[]>>();
 const postMortemOutputSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
@@ -16,6 +19,50 @@ const postMortemOutputSchema = z.object({
   mitigationSteps: z.string().min(1),
   markdownContent: z.string().min(1),
 });
+
+async function getRepositoryFilePaths(
+  octokit: NonNullable<ReturnType<typeof createProjectGitHubClient>>,
+  owner: string,
+  repo: string,
+  treeSha: string,
+): Promise<string[]> {
+  const cacheKey = `${owner.toLowerCase()}/${repo.toLowerCase()}@${treeSha}`;
+  let cachedPaths = repositoryTreeCache.get(cacheKey);
+  if (!cachedPaths) {
+    cachedPaths = octokit.rest.git.getTree({
+      owner,
+      repo,
+      tree_sha: treeSha,
+      recursive: "true",
+    }).then(({ data }) => {
+      if (data.truncated) {
+        throw new Error(`GitHub returned a truncated repository tree for ${owner}/${repo}@${treeSha}.`);
+      }
+      return data.tree.flatMap((entry) =>
+        entry.type === "blob" && entry.path ? [entry.path] : [],
+      );
+    });
+    repositoryTreeCache.set(cacheKey, cachedPaths);
+    if (repositoryTreeCache.size > MAX_CACHED_REPOSITORY_TREES) {
+      const oldestKey = repositoryTreeCache.keys().next().value;
+      if (oldestKey) repositoryTreeCache.delete(oldestKey);
+    }
+    void cachedPaths.catch(() => {
+      if (repositoryTreeCache.get(cacheKey) === cachedPaths) {
+        repositoryTreeCache.delete(cacheKey);
+      }
+    });
+  }
+  return cachedPaths;
+}
+
+function repositoryPathCandidates(targetPath: string, repositoryPaths: string[]): string[] {
+  const basename = targetPath.replace(/\\/g, "/").split("/").pop()?.toLowerCase();
+  if (!basename) return [];
+  return repositoryPaths
+    .filter((path) => path.split("/").pop()?.toLowerCase() === basename)
+    .slice(0, 20);
+}
 
 export async function executeRemediationNode(
   state: IncidentAgentState
@@ -157,12 +204,12 @@ export async function executeRemediationNode(
   else if (state.humanApprovalStatus === "APPROVED" && state.proposedAction === "BUGFIX_PR") {
     console.log(`[Node E] Processing automated bugfix PR...`);
 
-    const targetFilePath = state.actionPayload?.targetFilePath;
+    const rawTargetFilePath = state.actionPayload?.targetFilePath;
     const patchMode = state.actionPayload?.patchMode;
     const targetSha = state.actionPayload?.targetCommitSha;
 
     try {
-      if (!targetFilePath) throw new Error("The incident has no target source file to patch.");
+      if (!rawTargetFilePath) throw new Error("The incident has no target source file to patch.");
       if (!octokit) throw new Error("GitHub credentials are not configured for this project.");
 
       // 1. Fetch default branch and latest HEAD SHA
@@ -176,6 +223,21 @@ export async function executeRemediationNode(
       });
       const baseSha = refData.object.sha;
 
+      const repositoryFilePaths = await getRepositoryFilePaths(octokit, owner, repo, baseSha);
+      const availableRepoPaths = [...new Set([
+        ...repositoryFilePaths,
+        ...(state.inspectedFiles ?? []).map((file) => file.path),
+        ...(state.candidateCommits ?? []).flatMap((commit) => commit.filesChanged),
+      ])];
+      const targetFilePath = resolveRepositoryPath(rawTargetFilePath, availableRepoPaths);
+      if (!repositoryFilePaths.includes(targetFilePath)) {
+        const candidates = repositoryPathCandidates(rawTargetFilePath, repositoryFilePaths);
+        throw new Error(
+          `Could not resolve target file '${rawTargetFilePath}' to an existing repository path. ` +
+          `Resolved candidate: '${targetFilePath}'. Matching repository files: ${candidates.join(", ") || "none"}.`,
+        );
+      }
+
       // 2. Create an isolated remediation branch off default branch HEAD
       const branchIdentifier = targetSha ? targetSha.slice(0, 7) : Date.now().toString().slice(-6);
       const branchName = `healix/fix-${branchIdentifier}-${Date.now()}`;
@@ -188,12 +250,31 @@ export async function executeRemediationNode(
       });
 
       // 3. Fetch existing file contents and blob SHA
-      const { data: fileData } = await octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path: targetFilePath,
-        ref: branchName,
-      });
+      let fileData;
+      try {
+        ({ data: fileData } = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path: targetFilePath,
+          ref: branchName,
+        }));
+      } catch (error) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          error.status === 404
+        ) {
+          const candidates = repositoryPathCandidates(rawTargetFilePath, repositoryFilePaths);
+          const message =
+            `[Node E] GitHub could not find the bugfix target file. ` +
+            `Original target: '${rawTargetFilePath}'; resolved target: '${targetFilePath}'; ` +
+            `matching repository files: ${candidates.join(", ") || "none"}.`;
+          console.error(message, error);
+          throw new Error(message, { cause: error });
+        }
+        throw error;
+      }
 
       if (Array.isArray(fileData) || fileData.type !== "file" || !("content" in fileData)) {
         throw new Error(`Target path '${targetFilePath}' is not a valid single file.`);
