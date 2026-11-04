@@ -258,6 +258,11 @@ function buildFallbackPrompt(state: IncidentAgentState, failure: unknown): strin
 
 CRITICAL: The 'targetFilePath' field MUST be a repository-relative path exactly matching one of the file paths provided in the hydrated files list (for example, 'controllers/art.js' or 'src/index.ts'). NEVER output absolute container/runtime paths like '/opt/render/...', '/var/task/...', or local drive paths.
 
+CRITICAL CONTEXT CONSTRAINT:
+- You are running in single-turn emergency fallback mode without tool access.
+- If a function call crashes because an argument is undefined or invalid, and the implementation/definition of that imported function is NOT visible in the hydrated source snippets, DO NOT GUESS OR INVENT dummy parameters (such as "en-US", "USD", or mock data).
+- In such missing-dependency cases, return proposedAction "MANUAL_INTERVENTION" with an explanation in the hypothesis stating that the imported helper definition was not hydrated or accessible.
+
 CODE REMEDIATION PRINCIPLES:
 1. DEFENSIVE PROGRAMMING OVER HARDCODED VALUES:
    - When resolving undefined/null exceptions, missing arguments, or type mismatches, apply defensive patterns: optional chaining (?.), nullish coalescing (??), default parameters, or defensive guards.
@@ -293,6 +298,7 @@ Return the standard diagnosis JSON contract. BUGFIX_PR requires an exact targetF
 async function runGeminiInvestigation(
   state: IncidentAgentState,
   prompt: string,
+  modelName = "gemini-3.5-flash-lite",
 ): Promise<z.infer<typeof diagnosisOutputSchema>> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured.");
@@ -322,7 +328,7 @@ async function runGeminiInvestigation(
 
   const ai = new GoogleGenAI({ apiKey });
   const chat = ai.chats.create({
-    model: "gemini-2.5-flash",
+    model: modelName,
     config: {
       temperature: 0.2,
       automaticContinuation: false,
@@ -421,19 +427,26 @@ export async function diagnoseRootCauseNode(
   const prompt = formatIncidentContext(state);
 
   try {
-    const diagnosis = await runGeminiInvestigation(state, prompt);
-    console.log(`[Node C] Gemini diagnosis completed. Proposed action: ${diagnosis.proposedAction}`);
+    const diagnosis = await runGeminiInvestigation(state, prompt, "gemini-3.5-flash-lite");
+    console.log(`[Node C] Gemini 3.5 Flash Lite diagnosis completed. Proposed action: ${diagnosis.proposedAction}`);
     return toIncidentUpdate(diagnosis);
-  } catch (geminiError) {
-    console.warn("[Node C] Gemini diagnosis loop failed or rate-limited. Triggering Groq fallback...", geminiError);
+  } catch (primaryError) {
+    console.warn("[Node C] Gemini 3.5 Flash Lite failed. Retrying with Gemini 3.1 Flash Lite...", primaryError);
     try {
-      const fallbackText = await generateGroqJson(buildFallbackPrompt(state, geminiError), FALLBACK_MODEL);
-      const diagnosis = parseDiagnosis(fallbackText, state);
-      console.log(`[Node C] Groq fallback diagnosis completed. Proposed action: ${diagnosis.proposedAction}`);
+      const diagnosis = await runGeminiInvestigation(state, prompt, "gemini-3.1-flash-lite");
+      console.log(`[Node C] Gemini 3.1 Flash Lite diagnosis completed. Proposed action: ${diagnosis.proposedAction}`);
       return toIncidentUpdate(diagnosis);
-    } catch (groqError) {
-      console.error("[Node C] Groq diagnosis fallback failed; using safe manual-intervention degradation.", groqError);
-      return safeDegradation();
+    } catch (secondaryError) {
+      console.warn("[Node C] All Gemini tiers failed or rate-limited. Triggering Groq fallback...", secondaryError);
+      try {
+        const fallbackText = await generateGroqJson(buildFallbackPrompt(state, secondaryError), FALLBACK_MODEL);
+        const diagnosis = parseDiagnosis(fallbackText, state);
+        console.log(`[Node C] Groq fallback diagnosis completed. Proposed action: ${diagnosis.proposedAction}`);
+        return toIncidentUpdate(diagnosis);
+      } catch (groqError) {
+        console.error("[Node C] Groq diagnosis fallback failed; using safe manual-intervention degradation.", groqError);
+        return safeDegradation();
+      }
     }
   }
 }
