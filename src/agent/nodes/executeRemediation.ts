@@ -429,6 +429,9 @@ export async function executeRemediationNode(
             );
           }
 
+          console.log(`[Node E: Patch] Attempting replacement in file: ${targetFilePath}`);
+          console.log(`[Node E: Patch] Search block snippet:\n${searchBlock.slice(0, 120)}...`);
+          console.log(`[Node E: Patch] Replace block snippet:\n${replaceBlock.slice(0, 120)}...`);
           const replacement = applyReplacementBlock(updated, searchBlock, replaceBlock);
           if (!replacement.success) {
             throw new Error(
@@ -710,7 +713,7 @@ export async function executeRemediationNode(
     - markdownContent: The complete formatted markdown report with clear headings (Executive Summary, Timeline, Root Cause, Mitigation, Preventative Recommendations).
   `;
 
-  // 3. Use Groq if Gemini is unavailable or does not return the required JSON.
+  // 3. Try Gemini models in order, then use Groq if neither returns valid JSON.
   let parsed = {
     title: "Incident Post-Mortem Report",
     summary: state.hypothesis.slice(0, 500),
@@ -719,9 +722,9 @@ export async function executeRemediationNode(
     markdownContent: `# Incident Post-Mortem: ${state.incidentId}\n\n**Root Cause:**\n${state.hypothesis}\n\n**Mitigation:**\n${mitigationOutcomeSummary}`,
   };
   try {
-    try {
+    const generateGeminiPostMortem = async (model: string) => {
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model,
         contents: systemPrompt,
         config: {
           responseMimeType: "application/json",
@@ -738,13 +741,24 @@ export async function executeRemediationNode(
           },
         },
       });
-      if (!response.text) throw new Error("Gemini returned an empty post-mortem.");
-      parsed = postMortemOutputSchema.parse(JSON.parse(response.text));
-    } catch (geminiError) {
-      console.error("[Node E] Gemini post-mortem generation failed; trying Groq fallback.", geminiError);
-      const responseText = await generateGroqJson(systemPrompt);
-      parsed = postMortemOutputSchema.parse(JSON.parse(responseText));
-      console.log("[Node E] Post-mortem generated with Groq fallback.");
+      if (!response.text) throw new Error(`${model} returned an empty post-mortem.`);
+      return postMortemOutputSchema.parse(JSON.parse(response.text));
+    };
+
+    try {
+      parsed = await generateGeminiPostMortem("gemini-3.5-flash-lite");
+      console.log("[Node E] Post-mortem generated with Gemini 3.5 Flash Lite.");
+    } catch (primaryError) {
+      console.error("[Node E] Gemini 3.5 Flash Lite post-mortem failed; trying Gemini 3.1 Flash Lite.", primaryError);
+      try {
+        parsed = await generateGeminiPostMortem("gemini-3.1-flash-lite");
+        console.log("[Node E] Post-mortem generated with Gemini 3.1 Flash Lite.");
+      } catch (secondaryError) {
+        console.error("[Node E] Both Gemini post-mortem models failed; trying Groq fallback.", secondaryError);
+        const responseText = await generateGroqJson(systemPrompt);
+        parsed = postMortemOutputSchema.parse(JSON.parse(responseText));
+        console.log("[Node E] Post-mortem generated with Groq fallback.");
+      }
     }
   } catch (error) {
     console.error("[Node E] Gemini and Groq post-mortem generation failed; using the local report.", error);
