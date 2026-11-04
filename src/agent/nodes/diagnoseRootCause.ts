@@ -162,7 +162,9 @@ function parseDiagnosis(text: string, state: IncidentAgentState): z.infer<typeof
     diagnosis.proposedAction === "BUGFIX_PR" &&
     !hasIncidentFileEvidence(state, diagnosis.actionPayload.targetFilePath)
   ) {
-    throw new Error("BUGFIX_PR target file is not supported by the incident stack trace or recent commits.");
+    throw new Error(
+      "BUGFIX_PR target file is not supported by the incident stack trace, recent commits, or inspected files.",
+    );
   }
   return diagnosis;
 }
@@ -410,6 +412,22 @@ async function runGeminiInvestigation(
         ref: defaultBranch,
         hydratedFiles: state.inspectedFiles,
       });
+      if (call.name === "read_file_content" && typeof call.args?.filePath === "string") {
+        const filePath = call.args.filePath.trim();
+        const isSuccessfulRead = filePath &&
+          !output.startsWith("Error:") &&
+          !output.startsWith("Target path is a directory");
+        if (isSuccessfulRead) {
+          const inspectedFiles = state.inspectedFiles ?? [];
+          const normalizedPath = filePath.replace(/\\/g, "/").toLowerCase();
+          if (!inspectedFiles.some((file) =>
+            file.path.replace(/\\/g, "/").toLowerCase() === normalizedPath,
+          )) {
+            inspectedFiles.push({ path: filePath, content: output });
+            state.inspectedFiles = inspectedFiles;
+          }
+        }
+      }
       functionResponses.push({
         functionResponse: {
           name: call.name,

@@ -11,12 +11,17 @@ function sameFilePath(left: string, right: string): boolean {
 }
 
 export function hasIncidentFileEvidence(
-  state: Pick<IncidentAgentState, "stackTrace" | "candidateCommits">,
+  state: Pick<IncidentAgentState, "stackTrace" | "candidateCommits" | "inspectedFiles">,
   targetFilePath: string | undefined,
 ): boolean {
   if (!targetFilePath?.trim()) return false;
 
   const target = normalizePath(targetFilePath.trim());
+  const appearsInInspectedFiles = state.inspectedFiles.some((file) =>
+    sameFilePath(file.path, target),
+  );
+  if (appearsInInspectedFiles) return true;
+
   const trace = normalizePath(state.stackTrace);
   const appearsInStackTrace =
     trace.includes(`/${target}:`) ||
